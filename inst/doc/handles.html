@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Persisting a class that owns a handle</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Persisting a class that owns a handle</h1>
+
+
+
+<div id="where-the-default-rule-stops" class="section level2">
+<h2>Where the default rule stops</h2>
+<p>Most classes need nothing from this page. An S3, S4 or S7 object is a
+base type plus attributes, so <code>json_write()</code> records it
+without help and the value that comes back is the value that went in.
+That rule stops at an external pointer, which names something that
+exists only inside the running session and does not survive being
+written down. An environment is recorded — by name where a name finds it
+again, by its contents otherwise — but only as far as what it binds, so
+one holding an external pointer is refused with it, as is one holding a
+promise or an active binding, since reading either would run code.</p>
+<p>A connection is the case worth walking through, because it does not
+look like a handle. It prints as a small integer, and an integer is
+data.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(typedjson)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>path <span class="ot">&lt;-</span> <span class="fu">file.path</span>(<span class="fu">tempdir</span>(), <span class="st">&quot;events.log&quot;</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="fu">writeLines</span>(<span class="fu">sprintf</span>(<span class="st">&quot;event %d&quot;</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>), path)</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>con <span class="ot">&lt;-</span> <span class="fu">file</span>(path, <span class="at">open =</span> <span class="st">&quot;r&quot;</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="fu">str</span>(<span class="fu">unclass</span>(con))</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="co">#&gt;  int 4</span></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="co">#&gt;  - attr(*, &quot;conn_id&quot;)=&lt;externalptr&gt;</span></span></code></pre></div>
+<p>The integer is a slot in this process’s table of open connections,
+and the external pointer beside it is what makes using that slot safe.
+Neither means anything in the session that reads the document back, so
+the writer refuses.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">json_write_str</span>(con)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `x$conn_id`</span></span></code></pre></div>
+<p>Refusing is the whole point. Writing the integer would hand back a
+number indexing whatever connection occupies that slot next, and writing
+<code>null</code> would drop the handle quietly; either way the damage
+surfaces later and somewhere else. The error instead names the path it
+stopped at, so a handle buried deep in a large value is reported by
+where it sits.</p>
+<p>Everything on this page is about the default, which is the mode that
+reads a value back. Plain mode — <code>typed = FALSE</code>, for a
+document whose shape a schema elsewhere already fixes — writes no
+annotation and reads an attribute only to settle object against array
+and scalar against array, so it never walks into the attribute the
+pointer above sits in, and writes the bare slot integer this section
+argues against. The argument is not weaker there, it is inapplicable:
+what makes the integer dangerous is a reader rebuilding a connection
+from it, and plain mode has no revival step to do that in. The plain
+output section of <code>vignette(&quot;design&quot;)</code> states the rule and
+the two places it lands.</p>
+</div>
+<div id="a-reader-that-owns-a-connection" class="section level2">
+<h2>A reader that owns a connection</h2>
+<p>Here is a small class of the shape that runs into this: a reader that
+walks a file in chunks, holding the connection open between calls.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>chunk_reader <span class="ot">&lt;-</span> <span class="cf">function</span>(path, <span class="at">size =</span> <span class="dv">2</span><span class="dt">L</span>) {</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="fu">structure</span>(</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">path =</span> path, <span class="at">size =</span> size, <span class="at">con =</span> <span class="fu">file</span>(path, <span class="at">open =</span> <span class="st">&quot;r&quot;</span>)),</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>    <span class="at">class =</span> <span class="st">&quot;chunk_reader&quot;</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  )</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>}</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a>read_next <span class="ot">&lt;-</span> <span class="cf">function</span>(x) {</span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a>  <span class="fu">readLines</span>(x<span class="sc">$</span>con, <span class="at">n =</span> x<span class="sc">$</span>size)</span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>reader <span class="ot">&lt;-</span> <span class="fu">chunk_reader</span>(path)</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="fu">read_next</span>(reader)</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="co">#&gt; [1] &quot;event 1&quot; &quot;event 2&quot;</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="fu">read_next</span>(reader)</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt; [1] &quot;event 3&quot; &quot;event 4&quot;</span></span></code></pre></div>
+<p>Two chunks in, the reader is a perfectly ordinary list of a string,
+an integer and a connection, and writing it fails on the third
+field.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">json_write_str</span>(reader)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `x$con$conn_id`</span></span></code></pre></div>
+</div>
+<div id="what-to-record" class="section level2">
+<h2>What to record</h2>
+<p>The extension protocol is a pair of generics modeled on the
+<code>__getstate__</code> and <code>__setstate__</code> methods of
+Python’s pickle. A <code>json_state()</code> method returns a plain list
+of what to persist, and is free to leave out anything that can be
+rebuilt.</p>
+<p>The judgment it asks for is which parts of the object are the state
+and which are only the means. Here the connection is the means: what
+identifies this reader is the file it walks, the chunk size it walks in,
+and how far into the file it has got.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>json_state.chunk_reader <span class="ot">&lt;-</span> <span class="cf">function</span>(x) {</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">path =</span> x<span class="sc">$</span>path, <span class="at">size =</span> x<span class="sc">$</span>size, <span class="at">offset =</span> <span class="fu">seek</span>(x<span class="sc">$</span>con))</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>}</span></code></pre></div>
+<p>That is enough to write it.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">json_write_str</span>(reader, <span class="at">pretty =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="co">#&gt; {</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="co">#&gt;   &quot;~x&quot;: {</span></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co">#&gt;     &quot;class&quot;: &quot;chunk_reader&quot;,</span></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co">#&gt;     &quot;state&quot;: {</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co">#&gt;       &quot;path&quot;: &quot;/tmp/RtmpzaFTPM/events.log&quot;,</span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="co">#&gt;       &quot;size&quot;: 2,</span></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="co">#&gt;       &quot;offset&quot;: 32.0</span></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="co">#&gt;     }</span></span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="co">#&gt;   }</span></span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a><span class="co">#&gt; }</span></span></code></pre></div>
+<p>Nothing in the document is opaque. The <code>~x</code> tag says an
+extension method produced it, <code>class</code> is what dispatches on
+the way back, and the rest is the state as the method returned it — read
+under the ordinary rules, so <code>offset</code> is a double because
+<code>seek()</code> returns one.</p>
+</div>
+<div id="getting-it-back" class="section level2">
+<h2>Getting it back</h2>
+<p>Reviving is the other half. Dispatch happens on the recorded class
+through an empty object carrying it, so the first argument is the class
+token rather than the object being rebuilt, which does not exist
+yet.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>json_revive.chunk_reader <span class="ot">&lt;-</span> <span class="cf">function</span>(class, state) {</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  con <span class="ot">&lt;-</span> <span class="fu">file</span>(state<span class="sc">$</span>path, <span class="at">open =</span> <span class="st">&quot;r&quot;</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  <span class="fu">seek</span>(con, state<span class="sc">$</span>offset)</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>  <span class="fu">structure</span>(</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">path =</span> state<span class="sc">$</span>path, <span class="at">size =</span> state<span class="sc">$</span>size, <span class="at">con =</span> con),</span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a>    <span class="at">class =</span> <span class="st">&quot;chunk_reader&quot;</span></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a>  )</span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a>}</span></code></pre></div>
+<p>The reader that comes back is a different connection on the same
+file, positioned where the old one stopped, and it carries on.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="fu">json_write_str</span>(reader)</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>revived <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(doc)</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="fu">read_next</span>(revived)</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;event 5&quot; &quot;event 6&quot;</span></span></code></pre></div>
+</div>
+<div id="the-document-is-the-interface" class="section level2">
+<h2>The document is the interface</h2>
+<p>The offset is a number in a text file, which means it can be edited.
+Winding this reader back to the start of the file is a matter of
+changing one number, and there is nothing else that has to be kept in
+step with it.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>rewound <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(<span class="fu">sub</span>(<span class="st">&#39;&quot;offset&quot;:[0-9.]+&#39;</span>, <span class="st">&#39;&quot;offset&quot;:0.0&#39;</span>, doc))</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="fu">read_next</span>(rewound)</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="co">#&gt; [1] &quot;event 1&quot; &quot;event 2&quot;</span></span></code></pre></div>
+<p>That is the argument for the format in one line. The persisted state
+of a handle-owning object is exactly the kind of thing worth reading in
+a diff and worth fixing by hand, and neither is possible once it is a
+blob only R can open.</p>
+</div>
+<div id="when-the-resource-is-gone" class="section level2">
+<h2>When the resource is gone</h2>
+<p>Reviving runs your code, so what happens when the file has moved is
+your method’s decision rather than the format’s. The method above opens
+eagerly, so it reports the problem as soon as the document is read.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">json_read_str</span>(<span class="fu">sub</span>(<span class="fu">basename</span>(path), <span class="st">&quot;no-such-file&quot;</span>, doc, <span class="at">fixed =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="co">#&gt; Warning in file(state$path, open = &quot;r&quot;): cannot open file</span></span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="co">#&gt; &#39;/tmp/RtmpzaFTPM/no-such-file&#39;: No such file or directory</span></span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a><span class="co">#&gt; Error in `file()`:</span></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="co">#&gt; ! cannot open the connection</span></span></code></pre></div>
+<p>Opening lazily on the first <code>read_next()</code> call, or falling
+back to offset zero when the file is shorter than the recorded position,
+are equally valid; the protocol takes no view.</p>
+</div>
+<div id="methods-have-no-privileges" class="section level2">
+<h2>Methods have no privileges</h2>
+<p>Whatever a <code>json_state()</code> method returns is written under
+the same rules as any other value, which is what keeps the guarantee
+honest: a method cannot smuggle a handle out by wrapping it in a
+list.</p>
+<p>The guarantee bounds what a method may write, and not when one is
+asked, so read it in that direction only. Plain mode does not ask at
+all: a method written to keep a field out of a document is not consulted
+under <code>typed = FALSE</code>, and the field it was holding back is
+written with the rest of the object.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>json_state.leaky <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">list</span>(<span class="at">con =</span> x<span class="sc">$</span>con)</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>leaky <span class="ot">&lt;-</span> <span class="fu">structure</span>(<span class="fu">list</span>(<span class="at">con =</span> <span class="fu">file</span>(path)), <span class="at">class =</span> <span class="st">&quot;leaky&quot;</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a><span class="fu">json_write_str</span>(leaky)</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `x$state$con$conn_id`</span></span></code></pre></div>
+</div>
+<div id="a-class-with-no-default-to-fall-back-on" class="section level2">
+<h2>A class with no default to fall back on</h2>
+<p>An <code>R6</code> class is the case where there is no default at
+all. What an <code>R6</code> class guarantees is what its methods say,
+and its private fields are private precisely because they are not part
+of that, so recording an instance as the bindings it happens to hold is
+an assertion only the class can make. Writing one is refused, naming the
+class and the method that would settle it.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>ChunkReader <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;ChunkReader&quot;</span>,</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="at">public =</span> <span class="fu">list</span>(</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>    <span class="at">path =</span> <span class="cn">NULL</span>,</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>    <span class="at">size =</span> <span class="cn">NULL</span>,</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>    <span class="at">con =</span> <span class="cn">NULL</span>,</span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>    <span class="at">initialize =</span> <span class="cf">function</span>(path, <span class="at">size =</span> <span class="dv">2</span><span class="dt">L</span>) {</span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>      self<span class="sc">$</span>path <span class="ot">&lt;-</span> path</span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a>      self<span class="sc">$</span>size <span class="ot">&lt;-</span> size</span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a>      self<span class="sc">$</span>con <span class="ot">&lt;-</span> <span class="fu">file</span>(path, <span class="at">open =</span> <span class="st">&quot;r&quot;</span>)</span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a>    },</span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a>    <span class="at">read_next =</span> <span class="cf">function</span>() {</span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a>      <span class="fu">readLines</span>(self<span class="sc">$</span>con, <span class="at">n =</span> self<span class="sc">$</span>size)</span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a>    }</span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a>  )</span>
+<span id="cb13-15"><a href="#cb13-15" tabindex="-1"></a>)</span>
+<span id="cb13-16"><a href="#cb13-16" tabindex="-1"></a></span>
+<span id="cb13-17"><a href="#cb13-17" tabindex="-1"></a>reader <span class="ot">&lt;-</span> ChunkReader<span class="sc">$</span><span class="fu">new</span>(path)</span>
+<span id="cb13-18"><a href="#cb13-18" tabindex="-1"></a><span class="fu">json_write_str</span>(reader)</span>
+<span id="cb13-19"><a href="#cb13-19" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb13-20"><a href="#cb13-20" tabindex="-1"></a><span class="co">#&gt; ! an `R6` instance needs a `json_state()` method for class `ChunkReader` at `x`</span></span></code></pre></div>
+<p>The pair on this page is the answer, written exactly as it was for
+the S3 reader above. Ordinary dispatch settles which one is found: the
+class vector is <code>c(&quot;ChunkReader&quot;, &quot;R6&quot;)</code>, so a method on
+<code>ChunkReader</code> is reached ahead of the one on <code>R6</code>
+that does the refusing.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>json_state.ChunkReader <span class="ot">&lt;-</span> <span class="cf">function</span>(x) {</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">path =</span> x<span class="sc">$</span>path, <span class="at">size =</span> x<span class="sc">$</span>size, <span class="at">offset =</span> <span class="fu">seek</span>(x<span class="sc">$</span>con))</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>}</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a></span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>json_revive.ChunkReader <span class="ot">&lt;-</span> <span class="cf">function</span>(class, state) {</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>  out <span class="ot">&lt;-</span> ChunkReader<span class="sc">$</span><span class="fu">new</span>(state<span class="sc">$</span>path, state<span class="sc">$</span>size)</span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>  <span class="fu">seek</span>(out<span class="sc">$</span>con, state<span class="sc">$</span>offset)</span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a>  out</span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a>}</span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a></span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a>reader<span class="sc">$</span><span class="fu">read_next</span>()</span>
+<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a><span class="co">#&gt; [1] &quot;event 1&quot; &quot;event 2&quot;</span></span>
+<span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a></span>
+<span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="fu">json_write_str</span>(reader)</span>
+<span id="cb14-15"><a href="#cb14-15" tabindex="-1"></a><span class="fu">cat</span>(doc)</span>
+<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="co">#&gt; {&quot;~x&quot;:{&quot;class&quot;:[&quot;ChunkReader&quot;,&quot;R6&quot;],&quot;state&quot;:{&quot;path&quot;:&quot;/tmp/RtmpzaFTPM/events.log&quot;,&quot;size&quot;:2,&quot;offset&quot;:16.0</span><span class="re">}}}</span></span>
+<span id="cb14-17"><a href="#cb14-17" tabindex="-1"></a></span>
+<span id="cb14-18"><a href="#cb14-18" tabindex="-1"></a>revived <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(doc)</span>
+<span id="cb14-19"><a href="#cb14-19" tabindex="-1"></a>revived<span class="sc">$</span><span class="fu">read_next</span>()</span>
+<span id="cb14-20"><a href="#cb14-20" tabindex="-1"></a><span class="co">#&gt; [1] &quot;event 3&quot; &quot;event 4&quot;</span></span></code></pre></div>
+<p>Going through <code>$new()</code> on the way back is the usual shape
+for a class whose constructor acquires the resource. The state list
+records what the constructor needs, and whatever the constructor cannot
+know — here the offset — is applied to the instance afterwards.</p>
+<p>Rebuilding through the constructor is also what keeps a finalizer
+honest. Where <code>initialize</code> acquires a handle and
+<code>finalize</code> releases it, the two only line up if the revived
+object went through <code>initialize</code> as well; an object filled in
+from a document acquired nothing, and its finalizer runs against a
+handle it never held. That hazard is one of the reasons an
+<code>R6</code> instance has no default in the first place, and
+<code>vignette(&quot;r6&quot;)</code> walks through deciding what a class’s state
+actually is.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

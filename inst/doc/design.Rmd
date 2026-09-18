@@ -1,0 +1,635 @@
+---
+title: "Design notes"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Design notes}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+library(typedjson)
+
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+
+show_documents <- function(..., typed = TRUE) {
+
+  exprs <- as.list(substitute(list(...)))[-1L]
+  values <- lapply(exprs, eval, envir = parent.frame())
+
+  knitr::kable(
+    data.frame(
+      `R value` = sprintf("`%s`", vapply(exprs, deparse1, character(1L))),
+      Document = sprintf(
+        "`%s`",
+        vapply(values, json_write_str, character(1L), typed = typed)
+      ),
+      check.names = FALSE
+    ),
+    row.names = FALSE
+  )
+}
+```
+
+Every document on this page is produced by the code that renders it, so the format described here is the format the installed package writes.
+
+## What this is, and what it is not
+
+The pitch is a persistence format: write an R value as JSON a human can read, and get the same value back. It is not a general-purpose JSON interop library, and it does not compete with jsonlite for talking to web APIs.
+
+The audience is code that needs a file to be restorable *and* inspectable — diffable in review, greppable in a terminal, readable by a non-R tool. Anything that only needs restorability should use RDS or qs2 and will be better served.
+
+## Two contracts
+
+Both are properties rather than examples, and both are fuzz-testable. The first says that a value survives the trip.
+
+```{r}
+x <- list(id = "block_1", weights = c(a = 0.5, b = NA, c = Inf), n = 3L)
+
+path <- tempfile(fileext = ".json")
+json_write(x, path)
+
+identical(json_read(path), x)
+```
+
+The second says that a document does.
+
+```{r}
+doc <- json_write_str(x)
+
+identical(json_write_str(json_read_str(doc)), doc)
+```
+
+The second falls out of the first once foreign documents are read under the same grammar rather than a separate lossy mode. It holds for every document this package writes; a foreign one settles after a single round trip, since a mixed-type array such as `[1, "a"]` has to come back as a list.
+
+Three values are not asked to meet the first contract as it stands. An environment recorded by its contents comes back as a different object, exactly as `unserialize(serialize(e, NULL))` does, so the property it holds is stated as the weaker one rather than left to make `identical()` the wrong test — and a closure over such an environment is stated the same way, since it is that environment plus a formals and a body that do come back identical. An S7 class a document carries the definition of is the first case reached through a class rather than through an environment written on its own: S7 builds the constructor of a class that has a parent in an environment of its own, that environment is recorded by its contents like any other, and so no by-value scheme can hand back the object that was written. Base R does not manage it either, `identical(unserialize(serialize(x, NULL)), x)` being `FALSE` for an S7 object in the same session. A string R has not declared an encoding for is the same move at a smaller scale: a document carries one encoding, so the string comes back declared UTF-8, and stating the trip on its bytes is what keeps `identical()` from being the wrong test under a locale that cannot represent them.
+
+- **Exact.** The relation above, which every other value in scope meets, and which an environment recorded by name meets too. A string carrying no encoding declaration meets it on its bytes.
+- **Equivalent.** Same bindings by name and by value, same locked and active status, and a parent that is itself equivalent. A closure meets it where its formals and body are identical and the environment it closes over is equivalent.
+
+The second contract is untouched either way: a document written from a rebuilt environment writes the same bytes again.
+
+## Format
+
+### Principles
+
+Emit ordinary JSON wherever the value is unambiguous, and escalate only where there is something to say. The writer decides from `TYPEOF()` and the attribute list as it emits; there are no heuristics, no trial encoding, and no pass over a parsed object.
+
+### Atomic values
+
+An attribute-free vector emits as an ordinary array, and its type rides on the number lexeme. A double writes with a decimal point or an exponent, an integer without.
+
+```{r, echo = FALSE}
+show_documents(c(1.0, 2.5), c(1L, 2L), c("a", "b"), c(TRUE, FALSE))
+```
+
+The yyjson library both formats doubles to their shortest round-trip representation and reports `UINT` / `SINT` / `REAL` subtypes on parse, so the most common loss in the readable jsonlite pair costs zero bytes and zero code here.
+
+Two rules decide the container. A JSON array of scalars is an atomic vector and a JSON object is a named list, so both mean what they mean everywhere else, and nesting is what separates a list from a vector.
+
+```{r, echo = FALSE}
+show_documents(list(1L, 2L), list(name = "config", retries = 3L))
+```
+
+A length-one vector is written bare wherever an array could not be mistaken for it: at the document root, as an object value, as an attribute value, and as the payload of a tagged object. Brackets survive only around an array element, where they are the one thing separating `list(1, 2)` from `c(1, 2)`.
+
+```{r, echo = FALSE}
+show_documents(TRUE, 1L, list(1, 2))
+```
+
+A document is UTF-8, and so is every string that goes into one. A string R has declared as UTF-8 or latin1 is converted from what it declares; one it has not declared is taken as the bytes it holds, rather than translated through the locale, so the same value writes the same document on every machine. Undeclared bytes that are not valid UTF-8 have no reading to fall back on and are refused where they sit, naming the path.
+
+### Plain output
+
+The annotations are worth their bytes only where the document describes the value. Where it has to satisfy a schema someone else wrote, they are noise, and `typed = FALSE` leaves them out: the S4 bit is dropped and nearly every attribute with it, and what remains is the two container rules and the number lexemes.
+
+One distinction survives, and it is the one a naive implementation gets wrong. Shape requirements run both ways inside a single document — JSON Schema wants a scalar at `additionalProperties` and an array at `required` at length one as much as at length three — so unboxing everything breaks the one and unboxing nothing breaks the other. No encoder can choose by inspecting the value, because at length one a scalar and a one-element array are the same R object. The distinction already lives in the R value, where `I("x")` differs from `c("a", "b")` by more than length, so plain mode renders it rather than importing a policy for it: a length-one vector is a scalar unless it is `AsIs`, in which case it keeps its brackets.
+
+```{r, echo = FALSE}
+show_documents(list(required = I("x"), additionalProperties = FALSE),
+               typed = FALSE)
+```
+
+That is the whole of the configuration, and the rest follows from leaving annotations out. Boxing an array element goes with them, since what it was carrying is the difference between `list(1, 2)` and `c(1, 2)`, which is a fact about the value rather than about the schema. Escaping goes too, because the consumer asked for the name it asked for — which is the one place a plain document stops being one this reader takes back, and it stops for the reason any foreign document spelling an unknown tag does.
+
+#### Which attributes survive
+
+Two attributes are read on this path, so "attributes are dropped" is the wrong way to say what happens to them. The rule that holds is narrower and predicts more. JSON puts two questions to every value that the container rules leave open — object or array, and at length one scalar or array — and answering them is the only thing plain mode reads an attribute for: the `names` of a list settle the first, the `AsIs` marker settles the second. Nothing else is asked anything.
+
+```{r, echo = FALSE}
+show_documents(list(a = I("x"), b = "y"), c(a = 1, b = 2), matrix(1:4, 2),
+               factor("b", levels = c("a", "b")), typed = FALSE)
+```
+
+Read that way, the rows above are one rule rather than four. A name is a key only where it was already answering the first question, which is a list rather than a named vector, since an atomic vector is an array whatever its elements are called. A `dim` answers neither, since a vector is a flat array with one or without one, so a matrix flattens instead of nesting — the nested document is what `list(c(1, 3), c(2, 4))` writes, and that is a different value under the container rules rather than the same one indented. And `levels`, `tzone`, `units` and a class naming a type carry meaning rather than shape, which is a question the schema has already answered, so a factor writes its codes and a `Date` its number.
+
+Nothing is written that the value is not. A missing value becomes `null`, which is what JSON spells absence with, and everything the annotations were the only way to write is refused where it sits, naming the path.
+
+```{r, error = TRUE}
+json_write_str(list(a = 1, at = quote(f(x))), typed = FALSE)
+json_write_str(list(ratio = Inf), typed = FALSE)
+```
+
+Refusing rather than writing `null` is the same position taken everywhere else here, and the one divergence from `TypedJSON.jl` that costs the most to get wrong: it converts functions, IO handles and pointers to `null` "to avoid raising errors", which is silent corruption wearing a convenience.
+
+#### What plain mode writes that the default refuses
+
+Two consequences run the other way from everything else on this page, and both follow from the rule above rather than qualifying it. Attributes are not walked, so a handle reachable only through one is dropped along with it. A connection is the case `vignette("handles")` opens on: an integer slot wearing an external pointer, refused by the default because the integer means nothing in the session that reads it back.
+
+```{r, error = TRUE}
+con <- file(file.path(tempdir(), "events.log"))
+
+json_write_str(con)
+json_write_str(con, typed = FALSE)
+```
+
+```{r, include = FALSE}
+close(con)
+```
+
+The same pointer at value position is still refused here, naming the path, so the two positions disagree. That is the intended reading rather than a gap: the argument for refusing is that a revived integer indexes whatever connection occupies the slot next, and plain mode has no revival step to make that mistake in. A document it writes is read back as a bare number.
+
+Nor is a `json_state()` method consulted, since the hook sits on the typed path, below the point where plain mode has already returned.
+
+```{r}
+json_state.account <- function(x) list(user = x$user)
+acct <- structure(list(user = "nb", token = "s3cret"), class = "account")
+
+cat(json_write_str(acct))
+cat(json_write_str(acct, typed = FALSE))
+```
+
+A method says how to persist a value, and plain mode is not persistence, so this is the same line the rest of the section draws. It is worth stating anyway, because the guarantee in `vignette("handles")` is that a method has no privileges, and this is the direction that phrase does not cover: a method written to keep a credential out of a document is not asked, and does not stand between `typed = FALSE` and the field it was hiding.
+
+The reader is untouched. A plain document is a foreign document and reads under the grammar already there, so this adds no tag and no second mode on that side.
+
+### Values JSON cannot carry
+
+Typed `NA`, `Inf`, `-Inf` and `NaN` become prefix-tagged strings, and any ordinary string beginning with the prefix is escaped by doubling it.
+
+```{r, echo = FALSE}
+show_documents(NA_real_, c(1, Inf), "~foo", "Inf")
+```
+
+Borrowed from Transit, whose spec escapes any data string beginning with `~`, `^` or a backtick by prepending `~`. The escape closes the ambiguity by construction rather than by choosing a spelling nobody uses, which is what makes it a genuine fix for the class of bug where a link input of `"Inf"` restores as numeric infinity.
+
+On read, a `~` string is a tag when what follows the prefix is a discriminator the format has reserved. The reserved set is `z`, which spells every tag above, and `:`, which names a symbol; a reserved string this reader does not know is refused rather than rebuilt as a plausible value. Every other tilde-leading string is a literal, so `~/data` stays a path and "a string is always a string" holds for all of foreign JSON that the format has no claim on.
+
+```{r, error = TRUE}
+json_read_str('{"home": "~/data"}')
+json_read_str('"~zBogus"')
+```
+
+Reserving an alphabet rather than the bare prefix is where the two positions part company, and the reason is that a tilde-leading string is ordinary in foreign JSON while a tilde-leading key is not. Reserving late does not work either way, since a discriminator only earns a refusal from readers that already carry it, which makes the alphabet the shape a later spelling has to fit inside rather than something a later release can widen.
+
+The prefix is reserved at key position too, and there the reservation is total rather than by discriminator: a key beginning with a single `~` is a format tag, and one this reader does not know is refused rather than rebuilt as data. No document this package writes is affected, since a name of your own carries the doubled prefix.
+
+A name is a string, and JSON keys are strings, so the only name JSON cannot carry is `NA_character_` and `~zNA_character_` is the one string tag a key can hold. The rest of the vocabulary tags a value no name can take, and refusing those at key position is what keeps the escape rule honest there: `{"~zInf":1}` and `{"~~zInf":1}` would otherwise both rebuild the name `"~zInf"`.
+
+```{r, echo = FALSE}
+show_documents(setNames(list(1L), NA), setNames(list(1L), "~zInf"))
+```
+
+```{r, error = TRUE}
+json_read_str('{"~span": 3}')
+```
+
+Refusing is what lets the format grow, and the back-references below are what it grew into: they spell themselves as two new tags, and a reader carrying this rule refuses a document written against a tag it does not have instead of quietly returning a wrong value. That is the useful half of a version stamp for zero bytes, and a stamp itself does not fit, since an attribute-free vector emits as a bare array and so would need a wrapper that the foreign round trip cannot afford.
+
+### Attributes
+
+Anything carrying attributes escalates to a tagged object carrying the attributes recursively.
+
+```{r, echo = FALSE}
+show_documents(as.Date("2026-01-01"), c(a = 1, b = 2), character())
+```
+
+This single rule covers `Date`, `POSIXct`, factors, named vectors, matrices, data frames and classed lists, because in R every one of them is a base type plus attributes. Empty typed vectors escalate for the same reason — `[]` has no element in which to carry a type.
+
+Attributes install in the order the document records them, which is what makes the second contract hold for a value carrying more than one. The `dim` attribute is the one exception: setting it drops both `names` and `dimnames`, and `dimnames` is refused without a `dim` to check it against, so the reader sets it first. R stores `dim` first itself, so a document this package writes already leads with it and the exception costs document order nothing.
+
+Names ride in the payload rather than in the attribute object wherever the payload is an object, which is why a data frame shows its columns keyed by name.
+
+The type rides in the payload too, wherever the payload can state it. The decimal points in `[1.0,2.0]` are what make that a double vector under the rules above, so a `~t` naming the type would only repeat them, and the key is emitted exactly where it is not a repetition: where reading the payload on its own would escalate it in turn.
+
+| Value | Payload | Read on its own |
+| --- | --- | --- |
+| `character()` | `[]` | `list()`, since no element carries a type |
+| `1+2i` | `{"re":1.0,"im":2.0}` | a named list |
+| `as.raw(1)` | `"01"` | a string |
+
+Objects from S4 and S7 need it for the same reason, since `~t` names `"S4"` or `"object"` and there is no payload to read. Everywhere else — `Date`, `POSIXct`, factors, named vectors, matrices, data frames, classed lists — the lexemes already say it.
+
+What this asks a reader to know is that the presence of `~t` is a property of the value's type rather than of the document, so emptying a vector brings it back.
+
+```{r, echo = FALSE}
+show_documents(c(a = 1), c(a = 1)[0])
+```
+
+That is stable under ordinary edits and never depends on a sibling. It does leave the hand editor unguarded, since deleting a `.0` turns a double into an integer with nothing to catch it — but that was already true of every vector that does not escalate, which is what would have made the tag an inconsistent guard rather than a protective one.
+
+A reader recognizes the tagged form by any of `~t`, `~a` and `~v` at key position, which under the reservation rule above is the same test rather than a new one, since a single `~` at key position is a format tag either way. A `~t` that repeats what its payload says is still honored on the way in and dropped on the way out, so a document written by hand against the older shape reads, and then settles.
+
+### Types with no lexeme
+
+Complex and raw escalate unconditionally, since neither has a plain JSON form to fall back to, and each replaces the ordinary payload with a shape of its own, which is why both keep their `~t`.
+
+A complex vector splits into two named parts, one per component. Each part is an ordinary double payload, so the unboxing rule and the `~z` tags apply to it independently, and a value missing only one component still comes back exact.
+
+```{r, echo = FALSE}
+show_documents(1 + 2i, c(1 + 2i, 3 - 4i), complex(real = NA, imaginary = Inf))
+```
+
+Two columns rather than an object per element, because it stays compact for long vectors and matches how R stores a complex vector. The part names are the ones Julia's `JSON.jl` and the usual hand-rolled Python encoder already reach for, so the scalar case reads as a foreign consumer would write it. Writing R's own `1+2i` notation is the one spelling to avoid, and it is the one `jsonlite` picks: it loses precision, and a value with a missing component collapses to `"NA"` with the other component gone entirely.
+
+A raw vector is one lower-case hexadecimal string, two digits per byte, which is the form every hex dump already uses and is shorter than an array of small integers.
+
+```{r, echo = FALSE}
+show_documents(as.raw(c(0, 15, 255)))
+```
+
+### Language objects
+
+A call, an expression and a pairlist are values: each has value semantics, none can be shared observably, and none can contain itself. So they round-trip exactly, and this part of what would otherwise be refused costs no weakening of the first contract at all. What refusing them costs is every object carrying a recorded call, which is a caught condition and a fitted model among others.
+
+The tempting spelling is one deparsed string, because `{"~q":"mpg ~ wt"}` reads better than anything structural can. It is also lossy, and lossy in the one way this package exists to prevent: a call may carry an arbitrary R object as a constant in its tree, and deparsing turns that constant into code that re-parses as something else.
+
+```{r}
+x <- as.call(list(quote(f), c(1.1, 2.2)))
+identical(str2lang(paste(deparse(x), collapse = "\n")), x)
+```
+
+The element that went in as a double vector comes back as a call to `c`, and a constant needing more than 15 significant digits comes back rounded, since `deparse()` does not default to `digits17`. The `control = "exact"` setting closes neither hole; it wraps the result in `quote(...)`, which re-parses as a call to `quote`. Other shapes measured did survive — non-syntactic names, a tab inside a string, `x[[1]]$y@z`, and the `if` and `function` forms — so the hole is narrow. It is also silent, and it hands back a wrong value, which is the failure mode the format is built to refuse.
+
+The structural spelling costs no new machinery. A call is its elements, and `as.list()` already produces them with the argument names attached, so the payload is a partially named list, which the writer already emits and the reader already rebuilds. An expression is an array of language values, and a pairlist is the same shape as a call payload, with a missing default written as the empty symbol.
+
+```{r, echo = FALSE}
+show_documents(
+  quote(mpg ~ wt), quote(f(0.1, a = x)), formals(function(x, y = 2) NULL)
+)
+```
+
+A call is mostly symbols, so their spelling decides whether the format stays readable. The tagged-object form is correct and costs more than twice the bytes.
+
+| Spelling | `quote(mpg ~ wt)` | Bytes |
+| --- | --- | --- |
+| prefix tag | `{"~t":"language","~v":["~:~","~:mpg","~:wt"]}` | 45 |
+| tagged object | `{"~t":"language","~v":[{"~t":"symbol","~v":"~"},{"~t":"symbol","~v":"mpg"},{"~t":"symbol","~v":"wt"}]}` | 102 |
+
+So a symbol takes the prefix tag, which is the device the format already uses for typed `NA` and the non-finite doubles, and is safe here for the same reason: any ordinary string beginning with `~` is escaped by doubling, so a single-`~` string can never originate from user data. The empty symbol — what `x[, 1]` holds where a row index would go, and what a formals entry with no default holds — is the tag with nothing after it. Depth is not a limit in practice either: a 10000-deep call round-trips, where the deparsed form overflows the parser's context stack in `str2lang()` at 2000.
+
+Attributes ride the ordinary rule, which is what carries the `.Environment` of a formula, so `y ~ x` round-trips exactly once an environment does. A `{` block parsed with `keep.source = TRUE` reaches one step further down, where five `srcref` attributes point at one `srcfile` environment holding the source text; none of that is recorded, because a source reference is dropped wherever a parser attached one.
+
+```{r, error = TRUE}
+json_write_str(y ~ x)
+```
+
+### Object systems
+
+S3 falls out with no special case at all: an S3 object is a base type plus a `class` attribute.
+
+S4 falls out too, since slots are attributes, with two riders — the S4 bit is recorded separately because `typeof()` reports `S4` rather than the data type, and the reader can only rebuild if the class definition is loadable.
+
+S7 needs exactly one special case. Properties are stored as attributes and come through the ordinary rule, but the `S7_class` attribute holds the class generator, and a walk into one lands in S7's own machinery rather than in anything the class declares — a base class holds a validator closing over the promise that built it. So a class is recorded by what identifies it rather than by its contents. With that in place an S7 object round-trips directly, which removes the need for a hand-written record layer above it.
+
+Which of the two forms a class takes is decided by `package`, which S7 sets for a class defined in a package and leaves `NULL` for every class defined outside one. That is the same question as whether a name finds the class again in another session, so a package-scoped class is recorded as the class and package it names, and a class with no package carries its definition.
+
+```json
+{"~s7": {"class": "Point", "package": "somepkg"}}
+```
+
+```json
+{"~s7": {"class": "Point", "parent": {"~s7": "S7_object"}, "properties": {}, "abstract": false, "constructor": {"~t": "closure", "~v": {}}, "validator": null}}
+```
+
+Reading `NULL` as the global environment is what the second form retires. A class defined at top level passed that lookup in the session that wrote it and failed in every other, so findability at write time said nothing about findability at read time — and refusing such a class where it is written, which is what the `R6` side does, would have separated unfixable documents from fixable ones rather than predicting the read.
+
+Each class the definition names is recorded the same way, by what identifies it rather than by walking in. A class S7 itself binds is recorded by the name it holds in that namespace, which covers `class_character`, `class_numeric` and `S7_object` alike; an S3 class by its class vector, since the wrapper `new_S3_class()` puts around one is built on demand and bound nowhere; a union by its members; and a class of your own by the two forms above, recursively.
+
+```json
+{"~s7": "class_character"}
+```
+
+```json
+{"~s7": {"s3": ["factor"]}}
+```
+
+```json
+{"~s7": {"union": [{"~s7": "class_double"}, {"~s7": "class_character"}]}}
+```
+
+The class vector is an ordinary attribute and the `S7_class` record resolves without reading it, so the two can disagree in a document that has been edited. They are compared where the object is rebuilt, since dispatch would otherwise follow the one while the properties came from the other.
+
+Both of those rebuild the object from the document rather than construct one, which reaches past the point where the class would have decided whether to produce it at all: an S4 object arrives without its `initialize` method having run, and an S7 object without its `constructor`. The check the class does supply is therefore run where the object is rebuilt — `methods::validObject()` on the S4 side and `S7::validate()` on the S7 side — which is what stands between a hand-edited document and a value the class itself rejects. Neither disturbs a good round trip, a document written from a valid object describing a valid one, and the S7 call earns its keep twice over, since it checks property types as well and so catches a property the document omits or spells as something else. The lookup that finds the class is allowed to find one and not to fetch one, so a document naming a package this session has not loaded reads the way it did before the check existed rather than stopping at it.
+
+What neither call replaces is the construction it reached past. A slot or property that an `initialize` method or a `constructor` would have derived comes back as the document spells it, so a class computing `label` from `celsius` revives with the two out of step wherever a document has them that way, and only a validator comparing them will say so.
+
+An R6 generator is a name, and is recorded the way a package-scoped S7 class is: by the class it declares rather than by its contents. Nothing here embeds, since the environment a generator declares its class in is the one it is looked up in, and a generator that environment does not find again is refused where it is written.
+
+```json
+{"~r6class": {"class": ["Derived", "Base", "R6"], "package": "somepkg"}}
+```
+
+The class has to be recoverable for the document to be readable, so a generator that names no class, or that was built inside a function, is refused where it is written. Finding it again means scanning the environment the class was defined in for an `is.R6Class()` object whose `$classname` matches, then checking that the chain it declares through `get_inherit()` is the one recorded. Scanning is necessary rather than fussy, because the generator variable need not be named after the class — and for the same reason it can turn up two, which is an error rather than a coin toss. That lookup runs on the way out as well as on the way in, so a class vector no generator in that environment declares is caught where it is written rather than where it is read.
+
+An R6 instance is a different question, and the answer is that this package does not have one to give. Every other type in scope has a value its own type system supplies: a vector is its data, an S3 object is a base type plus attributes, and an S4 object is its slots exactly as an S7 object is its properties, which is why `new("Pt", x = 1, y = 2)` is a complete description of one. An R6 object is defined instead by what its methods guarantee, and its private fields are private precisely because they are not part of that. Recording an instance as the bindings it happens to hold is therefore an assertion about the class that only the class can make, so writing one is refused, naming the class and the method that would settle it.
+
+```{r, error = TRUE, eval = requireNamespace("R6", quietly = TRUE)}
+Counter <- R6::R6Class("Counter", public = list(n = 0))
+
+json_write_str(list(a = 1, b = Counter$new()))
+```
+
+Worth separating from what this resembles. Recording a constructor and the arguments it was called with is sound, because that mapping is the class's own public interface; reaching past `initialize` to reinstate private bindings is the opposite of the encapsulation the class exists to provide. So the mechanism is offered rather than assumed, as the `r6_state()` and `r6_restore()` pair a class author opts in with, and what it writes is an ordinary extension record rather than a tag of its own.
+
+```json
+{"~x": {"class": ["Derived", "Base", "R6"],
+        "state": {"package": "somepkg",
+                  "public":  {"n": 6, "tag": "t1"},
+                  "private": {"extra": "e", "seed": 42}}}}
+```
+
+Restoring one, verified end to end on a two-level class with private fields at both levels, an inherited method and an active binding:
+
+1. Find the generator, by the lookup above. The recorded `class` is the instance's whole class vector, so the generator that answers has to declare the same chain. A class prepended on the instance survives as the part of the vector no generator accounts for.
+2. Allocate without running `initialize`. Rebuild a twin generator from the original's `public_fields`, `public_methods`, `private_*`, `active`, `inherit` and `parent_env`, with a no-op `initialize` shadowing the real one — and the inherited one, which is what bites on subclasses — and `lock_objects = FALSE`.
+3. Populate and re-lock. Assign public fields into the object and private fields into `.__enclos_env__$private`, then call `lockEnvironment()` where the generator's `lock_objects` asks for it.
+
+The lock therefore comes from the generator rather than from the instance the document was written from. A lock a user placed on one object, or on a single binding inside it, is not recorded and does not come back: the payload carries field values and says nothing about how they are bound.
+
+The generator settles the shape too. Where it locks its instances, recorded state it no longer declares has nowhere to go, so that state is dropped with a warning naming it rather than bound into an object no constructor could produce. The mirror case needs nothing, since a field the generator has gained since the document was written arrives at its default. Where instances take new bindings the recorded state is restored whole, because a field assigned to one by hand is state like any other.
+
+Which is the argument for making this the author's call rather than the default, made from the inside: three paragraphs of behavior that only the class knows the right answer to, and `vignette("r6")` walks through deciding it.
+
+An external pointer stays out. What the writer refuses, it refuses loudly, naming the path it stopped at.
+
+A non-portable R6 class is on the far side of that line even for an author who has opted in. With `portable = FALSE` the object environment is also the environment its methods close over, so it binds `self` and `private` beside the fields and the generator stops accounting for everything that is not state. An instance of one is refused where it is written, naming the class, since making the class portable is what changes the answer.
+
+```{r, error = TRUE, eval = requireNamespace("R6", quietly = TRUE)}
+Bound <- R6::R6Class("Bound", portable = FALSE, public = list(n = 1))
+
+json_state.Bound <- function(x) r6_state(x)
+
+json_write_str(list(a = 1, b = Bound$new()))
+```
+
+A reference class instance is refused on the second half of that argument alone. Fields are declared, so `Class$fields()` says what the representation is where an `R6` class says nothing; the object is still a reference whose `initialize` may establish an invariant and whose fields are as good a place for a credential as a private binding, so recording the bindings is still an assertion only the class can make. A method on the concrete class settles it, as does one on any class between that and `envRefClass`, which is the rung the refusal itself sits on. The generator is refused rather than recorded by name, unlike the `R6` and S7 ones above, because a walk into one reaches the internals of the `methods` package rather than anything the class declares; recording it the way those two are recorded is open.
+
+The refusal follows the label rather than the shape, which is worth stating outright because the shape on its own is written. An environment carrying a class attribute of your own making claims nothing about its instances, so it takes the environment rule below and its bindings reach the document. That is the rule holding rather than a hole in it — an environment is its contents, which is what base R's `serialize()` records too — and a `json_state()` method is how a value of that shape says otherwise.
+
+### Environments
+
+An environment is written on a ladder, and only the bottom rung writes contents. The rungs are the ones base R's `serialize()` already recognizes — the global, base and empty environments, a namespace, and a package environment — plus the imports environment of a namespace, which constructive names and base R does not. Each is written as the name that finds it again, in the spelling R itself prints: `namespace:stats` beside `package:stats` and `imports:stats`.
+
+```{r, echo = FALSE}
+show_documents(globalenv(), baseenv(), as.environment("package:stats"))
+```
+
+The name itself comes from `environmentName()`, which is base R's own spelling of that ladder and answers for every rung above, so a rung base adds is a rung this format gains. What is added on top is a filter: a rung is a rung only where the name resolves *back* to the same object, which is the rule the `R6` generator lookup already runs on the way out. That closes the one hole base leaves open here, since `attr(e, "name") <- "package:stats"` on an environment of your own makes both `R_IsPackageEnv()` and `environmentName()` say yes. Resolving on the way out also never loads a package, because the name it is resolving may be one a value of your own made up.
+
+Everything else is written by what it binds, with the parent written by the same rule, so the walk terminates at a named rung rather than running to `emptyenv()` through everything in between. That is what keeps a document small: an environment under `.GlobalEnv` records the marker rather than your workspace.
+
+Bindings are ordered by their bytes rather than by `ls()`, whose collation is a locale setting — `c("B", "a")` sorts one way under `C` and the other under `en_US`, and one environment writing as two documents on two machines is the opposite of diffable.
+
+```{r}
+counter <- new.env(parent = asNamespace("stats"))
+counter$n <- 1L
+
+json_write_str(counter)
+```
+
+The locked bit and locked bindings ride alongside, since nothing else can supply them once the environment is rebuilt — where an `R6` instance takes its lock from the generator, a bare environment has no generator to ask.
+
+```{r}
+lockEnvironment(counter, bindings = TRUE)
+
+json_write_str(counter)
+```
+
+Two bindings are refused rather than recorded, and for the same reason: reading either one runs code. A promise would have to be forced, and an environment captured inside a function holds its arguments unforced, so forcing one on the writer's own initiative can error or do arbitrary work at write time. An active binding would have to be called, and recording what it returned would hand back a plain binding wearing its value. Base R writes both unevaluated; this format refuses them, and says where.
+
+A name that is not available on the way back is replaced by the global environment with a warning, which is what base R already does through `findPackageEnv()` and `..getNamespace()`. Substituting silently was never on the table.
+
+### Closures
+
+A closure compares by its parts rather than by reference, which is the fact this section rests on and is easy to assume the other way round.
+
+```{r}
+identical(function(x) x + 1, function(x) x + 1)
+```
+
+So there is nothing to weaken. Formals, body and environment are what a closure is; the first two are language objects and the third is an environment, which means a closure needs no machinery beyond the two sections above and inherits the environment ladder whole. It round-trips exactly wherever the environment it closes over is recorded by name, and up to equivalence wherever that environment is recorded by contents.
+
+```{r}
+show_documents(mean)
+```
+
+A closure over a frame of its own records that frame like any other environment, so the walk stops at the first rung it reaches rather than running to `emptyenv()` through the workspace.
+
+```{r}
+counter <- new.env(parent = globalenv())
+counter$i <- 1L
+
+json_write_str(local(function() i + 1, counter))
+```
+
+A primitive closes over nothing and has no body to write, so it is recorded by the name that finds it again. That is what base R does too, and note what it does *not* do: a closure that happens to be a package export is written by value like any other rather than as `stats::median`, because the environment rung already does the work a name lookup would.
+
+```{r}
+show_documents(sum, `if`)
+```
+
+No source reference is recorded. A parser attaches `srcref` to a function definition, to a `{` block and to what `parse()` returns, and `identical()` ignores all three by default, so dropping them costs nothing against the first contract and keeps a document diffable.
+
+```{r}
+formals(identical)$ignore.srcref
+```
+
+Keeping one would be worse than verbose. A `srcref` carries its `srcfile`, which is an environment holding the source text it came from, so a function parsed from a file would arrive with that file beside it. A byte-compiled closure is written from `body()`, which is the source tree it was compiled from, and left to the compiler to compile again; nothing here records bytecode.
+
+Two shapes stay refused, and neither is a closure's own doing. An argument the function was called with stays a promise in its frame whether or not it has been forced, so a closure over such a frame meets the promise rule above.
+
+```{r, error = TRUE}
+adder <- function(n) {
+  force(n)
+  function(x) x + n
+}
+
+json_write_str(adder(3))
+```
+
+And a closure a method stored back into the object it belongs to reaches that object again through the frame it closes over, which is a genuine cycle and is reported as one. Both are the environment rules holding rather than a limit on closures, and both are what the extension protocol below is for.
+
+### References
+
+Cycles and observable sharing are possible only through reference types. A value list cannot contain itself, because `l$self <- l` stores a copy, and copy-on-write means value types cannot tell whether they are shared. So this question arrives with environments and with R6, and with nothing else.
+
+Sharing needs no cycle and no `R6`. Two closures returned from one factory share their environment, which is the ordinary way to write a stateful pair in R, and without reference identity the pair comes back over two separate frames, so setting through one no longer moves what the other reads.
+
+```{r}
+mk <- local(
+  function() {
+    i <- 0
+    list(get = function() i, set = function(v) i <<- v)
+  },
+  globalenv()
+)
+
+pair <- json_read_str(json_write_str(mk()))
+pair$set(2)
+pair$get()
+```
+
+Three pieces, and the third is what the first two are for:
+
+- **A reference table.** Every reference the walk has reached, keyed by its `SEXP`. Reaching one a second time numbers the first write with `~id` and writes `{"~ref": n}` in its place. The number is minted where the repeat happens rather than where the first write did, so a document holding no sharing carries no marker and reads byte for byte as it would have without any of this. Base R's own `serialize()` keeps such a table for environments, which is the axis this used to sit behind `saveRDS` on.
+- **Numbering before descending.** The reader creates an environment and numbers it before reading what it binds, which is where a reference back to it comes from. That is what turns a cycle from an error into a document: `function() {e <- new.env(); e}` returns an environment whose parent frame binds it back, and it now writes and comes back bound the same way. Attributes are read before contents for the same reason, since that is the order they were written in and a reference only ever points backwards.
+- **What is still refused.** A cycle closing through an object the extension protocol builds in one call — any class with a `json_state()` method, an opted-in `R6` one among them — since a constructor cannot be handed an object that already exists. The error names both ends of it. Sharing such an object is fine; only the cycle is not, which leaves the chromote shape out (`Chromote` holds `sessions`, each `ChromoteSession` holds `parent`), and both of those wrap a live browser process anyway.
+
+The cycle in that second bullet is not a corner case: it is what any function returning an environment it created produces.
+
+```{r}
+frame <- local(
+  function() {
+    inner <- new.env()
+    inner
+  },
+  globalenv()
+)
+
+back <- json_read_str(json_write_str(frame()))
+
+identical(parent.env(back)$inner, back)
+```
+
+## Reading foreign JSON
+
+One grammar, applied to whatever is handed to us. Nothing is inferred from content; only from the lexeme and the shape.
+
+| JSON | R | inferred from |
+| --- | --- | --- |
+| `"abc"` | `"abc"`, always character | nothing |
+| `"~zNA_real_"` | `NA_real_` | exact match against the known tags |
+| `"~~foo"` | `"~foo"` | the escape rule |
+| `"~foo"`, `"~/data"` | the string itself | nothing; `f` and `/` are not reserved |
+| `123` | integer | the lexeme; yyjson reports `SINT` / `UINT` |
+| `1.0`, `1e3` | double | the lexeme carries `.` or an exponent |
+| `true` | logical | nothing |
+| `null` | `NULL` | nothing |
+| `[1,2,3]` | integer vector | shape |
+| `[[1],[2]]`, `[1,"a"]` | list | shape |
+| `{…}` | named list | nothing |
+| `"~:mpg"` | the symbol `mpg` | the reserved discriminator for a symbol |
+| `"~zBogus"` | an error | a reserved discriminator naming no known tag |
+| `{"~foo": …}` | an error | the reserved prefix at key position |
+| `{"~ref": 3}` | an error unless something carries `"~id": 3` | the reference table |
+
+No `NA` from `"NA"`, no `Inf` from `"Inf"`, no date from an ISO-8601-looking string, no data frame from an array of objects. There is no strict mode and no lossy mode, because there is only one set of rules.
+
+Numbers beyond what R holds exactly were left open while the format was being settled, and the resolution is to read them as doubles and say so. Silence would have been the one unacceptable answer, since the whole point is that a document never comes back quietly changed.
+
+```{r}
+json_read_str("[1, 9007199254740993]")
+```
+
+## API
+
+Small on purpose.
+
+```
+json_write(x, path)        json_read(path)
+json_write_str(x)          json_read_str(txt)
+json_state(x)              json_revive(class, state)     # extension protocol
+```
+
+Both writers take `pretty`, which indents, and `typed`, which at `FALSE` drops the annotations for a consumer that brings its own schema.
+
+## Extension protocol
+
+For classes the default does not fit — `initialize` opens a connection, a field holds a handle, a reference must be recorded as a key rather than a value — a pair of generics, modeled on the `__getstate__` and `__setstate__` methods of Python's pickle. A `json_state()` method returns a plain list of what to persist, and a `json_revive()` method turns that list back into the object.
+
+A class holding a closure built inside its own constructor is a case in point. The closure is writable, but the frame it closes over binds the constructor's argument, and an argument is a promise however far it has been forced.
+
+```{r}
+adder_class <- function(n) {
+  structure(list(n = n, f = function(x) x + n), class = "adder_class")
+}
+```
+
+```{r, error = TRUE}
+json_write_str(adder_class(3))
+```
+
+What identifies this object is `n`; the closure is derived from it, so the method records the one and drops the other.
+
+```{r}
+json_state.adder_class <- function(x) list(n = x$n)
+
+json_revive.adder_class <- function(class, state) adder_class(state$n)
+
+doc <- json_write_str(adder_class(3))
+doc
+
+json_read_str(doc)$f(4)
+```
+
+The default methods implement everything above, and dispatch works for all three class-vector-carrying object systems. A method is looked for on every class the value dispatches on, so an S4 object and a reference class instance are matched against their inheritance chain rather than the concrete class alone. On the way back, dispatch happens on the recorded class vector via an empty object carrying it, which is why the method signature starts with the class rather than the object being rebuilt, and which is what reaches a superclass method from the read side too.
+
+Whatever a method returns is written under the ordinary rules, so a method cannot smuggle a handle out by wrapping it in a list. A longer worked example, on a class that owns an open connection, is in `vignette("handles", package = "typedjson")`.
+
+## The gap this fills
+
+R has fast JSON, queryable JSON, and faithful-but-verbose JSON. Nothing was faithful *and* terse.
+
+The `jsonlite::toJSON()` / `fromJSON()` pair is readable and lossy. The `serializeJSON()` / `unserializeJSON()` pair is faithful and unreadable, at 3.6–4.9× the size, and its default `digits = 8` silently corrupts doubles — measured, 3994 of 4005 sample values come back changed, and `digits = NA` is lossy too. Only `digits >= 16` is exact. Everything published since jsonlite 2.0.0 is a speed play (yyjsonr, RcppSimdJson, jsonify, rapidjsonr) or a query layer (rjsoncons); none is a fidelity play.
+
+The losses in the readable pair are not exotic. Measured against a 37-value corpus of ordinary R values, that pair round-trips 14. Doubles come back as integers, all-`NA` vectors lose their type, names are dropped, `character()` and `integer()` both become `list()`, and `Date`, factor and `POSIXct` arrive as bare strings or numbers.
+
+The reason this is worth a package rather than a workaround is that the losses only bite where no schema exists. Walking a serialized blockr board, 0 of 77 leaves fail the round trip, because every value is rebuilt through a constructor that re-imposes its type. Persisted extension state has no constructor, so it takes the untagged path and arrives changed.
+
+## Engine
+
+Vendor yyjson, write the glue with cpp11.
+
+| | lang | license | maintained | int vs real on parse | shortest-RT doubles |
+| --- | --- | --- | --- | --- | --- |
+| **yyjson** | C | MIT | 2026-08-26, v0.12.0 | native `UINT` / `SINT` / `REAL` | yes |
+| simdjson | C++17 | Apache-2.0 | very active, v4.6.9 | yes | parser-first; its R binding exports no writer |
+| RapidJSON | C++ | MIT (mixed) | last release 2016 | yes | Grisu2, exact but not always shortest |
+| jsoncons | C++11 | Boost | active, v1.9.0 | yes | yes |
+| cJSON | C | MIT | active | no — every number is a `double` | no |
+| jsmn | C | MIT | 2024 | tokenizer only | you write it |
+
+The decisive column is the last one. Shortest-round-trip double formatting is the hard part, and getting it wrong reintroduces exactly the `serializeJSON` digits trap; writing Ryu or Grisu ourselves is not a reasonable undertaking. Vendoring is `yyjson.c` at 413 KB and `yyjson.h` at 323 KB, which is what yyjsonr already does.
+
+Two findings make yyjson fit better than its feature list suggests. Its builder takes a contiguous typed C array plus a length — `yyjson_mut_arr_with_real(doc, vals, n)` and friends — and R's vectors *are* contiguous typed arrays, so writing one is a single call with no per-element loop. And although it is DOM-only with no SAX API, that is an advantage here rather than a limitation: `yyjson_arr_size()` gives the length before allocation, so it is `allocVector(REALSXP, n)` once and fill, where a callback parser would not know the length until the array closed and would force grow-and-copy.
+
+The headroom that justified the choice was measured before this package existed, with yyjsonr standing in for the codec that had not been written yet, on a 172 KB payload:
+
+| | write | read |
+| --- | --- | --- |
+| yyjsonr (C) | 0.004 s | 0.004 s |
+| `jsonlite::toJSON()` / `fromJSON()` | 1.08 s | 0.19 s |
+| `jsonlite::serializeJSON()` / `unserializeJSON()` | 3.46 s | 1.11 s |
+
+The reason for a gap that size is that `serializeJSON()` is implemented in R — its `pack()` is a recursive R-level walk before anything reaches C — so a C codec fixes the speed and the verbosity in one move. What this package itself measures, on a payload of its own and against the same two pairs, is in `vignette("benchmarks", package = "typedjson")`.
+
+The cpp11 package unlocks nothing from any of these libraries; the customization points the C++ ones offer (`json_type_traits`, `adl_serializer`) map static C++ types, and `SEXP` is one dynamically-typed handle with nothing static to map. What it buys is safety in our own code: yyjson allocates its own document, and an R error longjmping mid-parse would leak it without unwind protection.
+
+## Testing
+
+One property over a corpus, and this is what decides whether the package is trustworthy.
+
+The corpus is every atomic type crossed with {empty, scalar, vector}, {no attributes, names, class} and {no NA, some NA, all NA}, plus the non-finites, the numeric extremes, the tag lookalikes, nesting, the language types, each object system, one entry per environment rung, a closure over each of those rungs and over a local frame, the primitives, and a random-value fuzzer. Where a value meets only the weaker contract the relation itself is the expectation, so equivalence is checked by one walk rather than spelled out at each call site. Every entry is checked in each position it can occupy, since a value written bare at the document root and the same value written as an array element take different paths. Real payloads on top: a board produced by `blockr.core::blockr_ser()`, a recorded set of LLM conversation turns, and a link input of `"Inf"` as a named regression.
+
+## Prior art
+
+Borrowed: the escaped prefix token from Transit, and the identity-plus-state model from Python's pickle, which records a class and its `__dict__` and reconstructs by lookup rather than serializing behavior.
+
+Considered and not taken: the sidecar of superjson, which keys type metadata by path at the document root, is elegant and keeps the payload untouched, but its dot paths break on keys containing dots and our payloads are full of them. MongoDB Extended JSON ships canonical and relaxed modes; we avoid needing two by annotating only what cannot be expressed plainly.
+
+Closest analogue is `TypedJSON.jl`, which states the same three goals — type fidelity, human readability, long-term archival — and uses a type identifier plus data with fully-qualified names for user-defined types. Two divergences, both deliberate. It tags non-finite scalars as objects where we use escaped strings, which costs an object per value and is the wrong trade when terseness is half the point. And it converts functions, IO handles and pointers to `null` "to avoid raising errors", which is the silent corruption this package exists to prevent; we error, or the class uses the extension protocol.
+
+## Deferred
+
+Determinism of key order, which is a separate and worthwhile guarantee for diffing and hashing, and which the JSON world already calls "stable". A binary sibling via CBOR or MessagePack, which would have argued for jsoncons over yyjson and can be revisited if it ever earns its place. Streaming, in both directions: writing a file hands the document to a `FILE*` rather than through an R string, but the whole document is still built twice over — once as the DOM, once as one contiguous buffer — before a byte reaches disk, and reading pulls the whole file into memory before parsing it. Emitting as the walk proceeds would mean replacing yyjson's builder, which is what buys the single-call typed-array write over R's contiguous vectors and the shortest round-trip double formatting, and yyjson offers no SAX reader to match it on the way back. A way to turn the S4 and S7 validity check off, which is a cost question rather than a correctness one. Running `methods::validObject()` or `S7::validate()` costs about 100 µs an object, paid even where the class declares no validator, since both still check slot and property types; the knee is around a thousand objects of one class in one document, which is well past what a format meant to stay diffable, greppable and editable by hand is aimed at. Construction is the ceiling — `methods::new()` on the same class costs 155 µs — so a read that validates still comes in under building the same objects through the class. What the argument would ask for also reads awkwardly once named honestly, an object the class says is invalid being the thing the `R6` refusal above already declines to hand out on the class's behalf, and adding it later costs little, the gate being a single call site a flag would skip before it reaches R.

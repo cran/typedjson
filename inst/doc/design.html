@@ -1,0 +1,1907 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Design notes</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Design notes</h1>
+
+
+
+<p>Every document on this page is produced by the code that renders it,
+so the format described here is the format the installed package
+writes.</p>
+<div id="what-this-is-and-what-it-is-not" class="section level2">
+<h2>What this is, and what it is not</h2>
+<p>The pitch is a persistence format: write an R value as JSON a human
+can read, and get the same value back. It is not a general-purpose JSON
+interop library, and it does not compete with jsonlite for talking to
+web APIs.</p>
+<p>The audience is code that needs a file to be restorable <em>and</em>
+inspectable — diffable in review, greppable in a terminal, readable by a
+non-R tool. Anything that only needs restorability should use RDS or qs2
+and will be better served.</p>
+</div>
+<div id="two-contracts" class="section level2">
+<h2>Two contracts</h2>
+<p>Both are properties rather than examples, and both are fuzz-testable.
+The first says that a value survives the trip.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">id =</span> <span class="st">&quot;block_1&quot;</span>, <span class="at">weights =</span> <span class="fu">c</span>(<span class="at">a =</span> <span class="fl">0.5</span>, <span class="at">b =</span> <span class="cn">NA</span>, <span class="at">c =</span> <span class="cn">Inf</span>), <span class="at">n =</span> <span class="dv">3</span><span class="dt">L</span>)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.json&quot;</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="fu">json_write</span>(x, path)</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="fu">identical</span>(<span class="fu">json_read</span>(path), x)</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<p>The second says that a document does.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="fu">json_write_str</span>(x)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="fu">identical</span>(<span class="fu">json_write_str</span>(<span class="fu">json_read_str</span>(doc)), doc)</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<p>The second falls out of the first once foreign documents are read
+under the same grammar rather than a separate lossy mode. It holds for
+every document this package writes; a foreign one settles after a single
+round trip, since a mixed-type array such as <code>[1, &quot;a&quot;]</code> has
+to come back as a list.</p>
+<p>Three values are not asked to meet the first contract as it stands.
+An environment recorded by its contents comes back as a different
+object, exactly as <code>unserialize(serialize(e, NULL))</code> does, so
+the property it holds is stated as the weaker one rather than left to
+make <code>identical()</code> the wrong test — and a closure over such
+an environment is stated the same way, since it is that environment plus
+a formals and a body that do come back identical. An S7 class a document
+carries the definition of is the first case reached through a class
+rather than through an environment written on its own: S7 builds the
+constructor of a class that has a parent in an environment of its own,
+that environment is recorded by its contents like any other, and so no
+by-value scheme can hand back the object that was written. Base R does
+not manage it either,
+<code>identical(unserialize(serialize(x, NULL)), x)</code> being
+<code>FALSE</code> for an S7 object in the same session. A string R has
+not declared an encoding for is the same move at a smaller scale: a
+document carries one encoding, so the string comes back declared UTF-8,
+and stating the trip on its bytes is what keeps <code>identical()</code>
+from being the wrong test under a locale that cannot represent them.</p>
+<ul>
+<li><strong>Exact.</strong> The relation above, which every other value
+in scope meets, and which an environment recorded by name meets too. A
+string carrying no encoding declaration meets it on its bytes.</li>
+<li><strong>Equivalent.</strong> Same bindings by name and by value,
+same locked and active status, and a parent that is itself equivalent. A
+closure meets it where its formals and body are identical and the
+environment it closes over is equivalent.</li>
+</ul>
+<p>The second contract is untouched either way: a document written from
+a rebuilt environment writes the same bytes again.</p>
+</div>
+<div id="format" class="section level2">
+<h2>Format</h2>
+<div id="principles" class="section level3">
+<h3>Principles</h3>
+<p>Emit ordinary JSON wherever the value is unambiguous, and escalate
+only where there is something to say. The writer decides from
+<code>TYPEOF()</code> and the attribute list as it emits; there are no
+heuristics, no trial encoding, and no pass over a parsed object.</p>
+</div>
+<div id="atomic-values" class="section level3">
+<h3>Atomic values</h3>
+<p>An attribute-free vector emits as an ordinary array, and its type
+rides on the number lexeme. A double writes with a decimal point or an
+exponent, an integer without.</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>c(1, 2.5)</code></td>
+<td align="left"><code>[1.0,2.5]</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>c(1L, 2L)</code></td>
+<td align="left"><code>[1,2]</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>c(&quot;a&quot;, &quot;b&quot;)</code></td>
+<td align="left"><code>[&quot;a&quot;,&quot;b&quot;]</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>c(TRUE, FALSE)</code></td>
+<td align="left"><code>[true,false]</code></td>
+</tr>
+</tbody>
+</table>
+<p>The yyjson library both formats doubles to their shortest round-trip
+representation and reports <code>UINT</code> / <code>SINT</code> /
+<code>REAL</code> subtypes on parse, so the most common loss in the
+readable jsonlite pair costs zero bytes and zero code here.</p>
+<p>Two rules decide the container. A JSON array of scalars is an atomic
+vector and a JSON object is a named list, so both mean what they mean
+everywhere else, and nesting is what separates a list from a vector.</p>
+<table>
+<colgroup>
+<col width="54%" />
+<col width="45%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>list(1L, 2L)</code></td>
+<td align="left"><code>[[1],[2]]</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>list(name = &quot;config&quot;, retries = 3L)</code></td>
+<td align="left"><code>{&quot;name&quot;:&quot;config&quot;,&quot;retries&quot;:3}</code></td>
+</tr>
+</tbody>
+</table>
+<p>A length-one vector is written bare wherever an array could not be
+mistaken for it: at the document root, as an object value, as an
+attribute value, and as the payload of a tagged object. Brackets survive
+only around an array element, where they are the one thing separating
+<code>list(1, 2)</code> from <code>c(1, 2)</code>.</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>TRUE</code></td>
+<td align="left"><code>true</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>1L</code></td>
+<td align="left"><code>1</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>list(1, 2)</code></td>
+<td align="left"><code>[[1.0],[2.0]]</code></td>
+</tr>
+</tbody>
+</table>
+<p>A document is UTF-8, and so is every string that goes into one. A
+string R has declared as UTF-8 or latin1 is converted from what it
+declares; one it has not declared is taken as the bytes it holds, rather
+than translated through the locale, so the same value writes the same
+document on every machine. Undeclared bytes that are not valid UTF-8
+have no reading to fall back on and are refused where they sit, naming
+the path.</p>
+</div>
+<div id="plain-output" class="section level3">
+<h3>Plain output</h3>
+<p>The annotations are worth their bytes only where the document
+describes the value. Where it has to satisfy a schema someone else
+wrote, they are noise, and <code>typed = FALSE</code> leaves them out:
+the S4 bit is dropped and nearly every attribute with it, and what
+remains is the two container rules and the number lexemes.</p>
+<p>One distinction survives, and it is the one a naive implementation
+gets wrong. Shape requirements run both ways inside a single document —
+JSON Schema wants a scalar at <code>additionalProperties</code> and an
+array at <code>required</code> at length one as much as at length three
+— so unboxing everything breaks the one and unboxing nothing breaks the
+other. No encoder can choose by inspecting the value, because at length
+one a scalar and a one-element array are the same R object. The
+distinction already lives in the R value, where <code>I(&quot;x&quot;)</code>
+differs from <code>c(&quot;a&quot;, &quot;b&quot;)</code> by more than length, so plain mode
+renders it rather than importing a policy for it: a length-one vector is
+a scalar unless it is <code>AsIs</code>, in which case it keeps its
+brackets.</p>
+<table>
+<colgroup>
+<col width="52%" />
+<col width="47%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>list(required = I(&quot;x&quot;), additionalProperties = FALSE)</code></td>
+<td align="left"><code>{&quot;required&quot;:[&quot;x&quot;],&quot;additionalProperties&quot;:false}</code></td>
+</tr>
+</tbody>
+</table>
+<p>That is the whole of the configuration, and the rest follows from
+leaving annotations out. Boxing an array element goes with them, since
+what it was carrying is the difference between <code>list(1, 2)</code>
+and <code>c(1, 2)</code>, which is a fact about the value rather than
+about the schema. Escaping goes too, because the consumer asked for the
+name it asked for — which is the one place a plain document stops being
+one this reader takes back, and it stops for the reason any foreign
+document spelling an unknown tag does.</p>
+<div id="which-attributes-survive" class="section level4">
+<h4>Which attributes survive</h4>
+<p>Two attributes are read on this path, so “attributes are dropped” is
+the wrong way to say what happens to them. The rule that holds is
+narrower and predicts more. JSON puts two questions to every value that
+the container rules leave open — object or array, and at length one
+scalar or array — and answering them is the only thing plain mode reads
+an attribute for: the <code>names</code> of a list settle the first, the
+<code>AsIs</code> marker settles the second. Nothing else is asked
+anything.</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>list(a = I(&quot;x&quot;), b = &quot;y&quot;)</code></td>
+<td align="left"><code>{&quot;a&quot;:[&quot;x&quot;],&quot;b&quot;:&quot;y&quot;}</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>c(a = 1, b = 2)</code></td>
+<td align="left"><code>[1.0,2.0]</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>matrix(1:4, 2)</code></td>
+<td align="left"><code>[1,2,3,4]</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>factor(&quot;b&quot;, levels = c(&quot;a&quot;, &quot;b&quot;))</code></td>
+<td align="left"><code>2</code></td>
+</tr>
+</tbody>
+</table>
+<p>Read that way, the rows above are one rule rather than four. A name
+is a key only where it was already answering the first question, which
+is a list rather than a named vector, since an atomic vector is an array
+whatever its elements are called. A <code>dim</code> answers neither,
+since a vector is a flat array with one or without one, so a matrix
+flattens instead of nesting — the nested document is what
+<code>list(c(1, 3), c(2, 4))</code> writes, and that is a different
+value under the container rules rather than the same one indented. And
+<code>levels</code>, <code>tzone</code>, <code>units</code> and a class
+naming a type carry meaning rather than shape, which is a question the
+schema has already answered, so a factor writes its codes and a
+<code>Date</code> its number.</p>
+<p>Nothing is written that the value is not. A missing value becomes
+<code>null</code>, which is what JSON spells absence with, and
+everything the annotations were the only way to write is refused where
+it sits, naming the path.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">list</span>(<span class="at">a =</span> <span class="dv">1</span>, <span class="at">at =</span> <span class="fu">quote</span>(<span class="fu">f</span>(x))), <span class="at">typed =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;language&#39; as plain JSON at `x$at`</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">list</span>(<span class="at">ratio =</span> <span class="cn">Inf</span>), <span class="at">typed =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="co">#&gt; ! cannot write a non-finite number as plain JSON at `x$ratio`</span></span></code></pre></div>
+<p>Refusing rather than writing <code>null</code> is the same position
+taken everywhere else here, and the one divergence from
+<code>TypedJSON.jl</code> that costs the most to get wrong: it converts
+functions, IO handles and pointers to <code>null</code> “to avoid
+raising errors”, which is silent corruption wearing a convenience.</p>
+</div>
+<div id="what-plain-mode-writes-that-the-default-refuses" class="section level4">
+<h4>What plain mode writes that the default refuses</h4>
+<p>Two consequences run the other way from everything else on this page,
+and both follow from the rule above rather than qualifying it.
+Attributes are not walked, so a handle reachable only through one is
+dropped along with it. A connection is the case
+<code>vignette(&quot;handles&quot;)</code> opens on: an integer slot wearing an
+external pointer, refused by the default because the integer means
+nothing in the session that reads it back.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>con <span class="ot">&lt;-</span> <span class="fu">file</span>(<span class="fu">file.path</span>(<span class="fu">tempdir</span>(), <span class="st">&quot;events.log&quot;</span>))</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="fu">json_write_str</span>(con)</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `x$conn_id`</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="fu">json_write_str</span>(con, <span class="at">typed =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;4&quot;</span></span></code></pre></div>
+<p>The same pointer at value position is still refused here, naming the
+path, so the two positions disagree. That is the intended reading rather
+than a gap: the argument for refusing is that a revived integer indexes
+whatever connection occupies the slot next, and plain mode has no
+revival step to make that mistake in. A document it writes is read back
+as a bare number.</p>
+<p>Nor is a <code>json_state()</code> method consulted, since the hook
+sits on the typed path, below the point where plain mode has already
+returned.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>json_state.account <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">list</span>(<span class="at">user =</span> x<span class="sc">$</span>user)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>acct <span class="ot">&lt;-</span> <span class="fu">structure</span>(<span class="fu">list</span>(<span class="at">user =</span> <span class="st">&quot;nb&quot;</span>, <span class="at">token =</span> <span class="st">&quot;s3cret&quot;</span>), <span class="at">class =</span> <span class="st">&quot;account&quot;</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">json_write_str</span>(acct))</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co">#&gt; {&quot;~x&quot;:{&quot;class&quot;:&quot;account&quot;,&quot;state&quot;:{&quot;user&quot;:&quot;nb&quot;</span><span class="re">}}}</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">json_write_str</span>(acct, <span class="at">typed =</span> <span class="cn">FALSE</span>))</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt; {&quot;user&quot;:&quot;nb&quot;,&quot;token&quot;:&quot;s3cret&quot;}</span></span></code></pre></div>
+<p>A method says how to persist a value, and plain mode is not
+persistence, so this is the same line the rest of the section draws. It
+is worth stating anyway, because the guarantee in
+<code>vignette(&quot;handles&quot;)</code> is that a method has no privileges, and
+this is the direction that phrase does not cover: a method written to
+keep a credential out of a document is not asked, and does not stand
+between <code>typed = FALSE</code> and the field it was hiding.</p>
+<p>The reader is untouched. A plain document is a foreign document and
+reads under the grammar already there, so this adds no tag and no second
+mode on that side.</p>
+</div>
+</div>
+<div id="values-json-cannot-carry" class="section level3">
+<h3>Values JSON cannot carry</h3>
+<p>Typed <code>NA</code>, <code>Inf</code>, <code>-Inf</code> and
+<code>NaN</code> become prefix-tagged strings, and any ordinary string
+beginning with the prefix is escaped by doubling it.</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>NA_real_</code></td>
+<td align="left"><code>&quot;~zNA_real_&quot;</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>c(1, Inf)</code></td>
+<td align="left"><code>[1.0,&quot;~zInf&quot;]</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>&quot;~foo&quot;</code></td>
+<td align="left"><code>&quot;~~foo&quot;</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>&quot;Inf&quot;</code></td>
+<td align="left"><code>&quot;Inf&quot;</code></td>
+</tr>
+</tbody>
+</table>
+<p>Borrowed from Transit, whose spec escapes any data string beginning
+with <code>~</code>, <code>^</code> or a backtick by prepending
+<code>~</code>. The escape closes the ambiguity by construction rather
+than by choosing a spelling nobody uses, which is what makes it a
+genuine fix for the class of bug where a link input of
+<code>&quot;Inf&quot;</code> restores as numeric infinity.</p>
+<p>On read, a <code>~</code> string is a tag when what follows the
+prefix is a discriminator the format has reserved. The reserved set is
+<code>z</code>, which spells every tag above, and <code>:</code>, which
+names a symbol; a reserved string this reader does not know is refused
+rather than rebuilt as a plausible value. Every other tilde-leading
+string is a literal, so <code>~/data</code> stays a path and “a string
+is always a string” holds for all of foreign JSON that the format has no
+claim on.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">json_read_str</span>(<span class="st">&#39;{&quot;home&quot;: &quot;~/data&quot;}&#39;</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="co">#&gt; $home</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="co">#&gt; [1] &quot;~/data&quot;</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="fu">json_read_str</span>(<span class="st">&#39;&quot;~zBogus&quot;&#39;</span>)</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co">#&gt; ! `~zBogus` is not a tag this reader knows</span></span></code></pre></div>
+<p>Reserving an alphabet rather than the bare prefix is where the two
+positions part company, and the reason is that a tilde-leading string is
+ordinary in foreign JSON while a tilde-leading key is not. Reserving
+late does not work either way, since a discriminator only earns a
+refusal from readers that already carry it, which makes the alphabet the
+shape a later spelling has to fit inside rather than something a later
+release can widen.</p>
+<p>The prefix is reserved at key position too, and there the reservation
+is total rather than by discriminator: a key beginning with a single
+<code>~</code> is a format tag, and one this reader does not know is
+refused rather than rebuilt as data. No document this package writes is
+affected, since a name of your own carries the doubled prefix.</p>
+<p>A name is a string, and JSON keys are strings, so the only name JSON
+cannot carry is <code>NA_character_</code> and
+<code>~zNA_character_</code> is the one string tag a key can hold. The
+rest of the vocabulary tags a value no name can take, and refusing those
+at key position is what keeps the escape rule honest there:
+<code>{&quot;~zInf&quot;:1}</code> and <code>{&quot;~~zInf&quot;:1}</code> would otherwise
+both rebuild the name <code>&quot;~zInf&quot;</code>.</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>setNames(list(1L), NA)</code></td>
+<td align="left"><code>{&quot;~zNA_character_&quot;:1}</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>setNames(list(1L), &quot;~zInf&quot;)</code></td>
+<td align="left"><code>{&quot;~~zInf&quot;:1}</code></td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">json_read_str</span>(<span class="st">&#39;{&quot;~span&quot;: 3}&#39;</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="co">#&gt; ! `~span` is not a tag this reader knows</span></span></code></pre></div>
+<p>Refusing is what lets the format grow, and the back-references below
+are what it grew into: they spell themselves as two new tags, and a
+reader carrying this rule refuses a document written against a tag it
+does not have instead of quietly returning a wrong value. That is the
+useful half of a version stamp for zero bytes, and a stamp itself does
+not fit, since an attribute-free vector emits as a bare array and so
+would need a wrapper that the foreign round trip cannot afford.</p>
+</div>
+<div id="attributes" class="section level3">
+<h3>Attributes</h3>
+<p>Anything carrying attributes escalates to a tagged object carrying
+the attributes recursively.</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>as.Date(&quot;2026-01-01&quot;)</code></td>
+<td align="left"><code>{&quot;~a&quot;:{&quot;class&quot;:&quot;Date&quot;},&quot;~v&quot;:20454.0}</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>c(a = 1, b = 2)</code></td>
+<td align="left"><code>{&quot;~a&quot;:{&quot;names&quot;:[&quot;a&quot;,&quot;b&quot;]},&quot;~v&quot;:[1.0,2.0]}</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>character()</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;character&quot;,&quot;~v&quot;:[]}</code></td>
+</tr>
+</tbody>
+</table>
+<p>This single rule covers <code>Date</code>, <code>POSIXct</code>,
+factors, named vectors, matrices, data frames and classed lists, because
+in R every one of them is a base type plus attributes. Empty typed
+vectors escalate for the same reason — <code>[]</code> has no element in
+which to carry a type.</p>
+<p>Attributes install in the order the document records them, which is
+what makes the second contract hold for a value carrying more than one.
+The <code>dim</code> attribute is the one exception: setting it drops
+both <code>names</code> and <code>dimnames</code>, and
+<code>dimnames</code> is refused without a <code>dim</code> to check it
+against, so the reader sets it first. R stores <code>dim</code> first
+itself, so a document this package writes already leads with it and the
+exception costs document order nothing.</p>
+<p>Names ride in the payload rather than in the attribute object
+wherever the payload is an object, which is why a data frame shows its
+columns keyed by name.</p>
+<p>The type rides in the payload too, wherever the payload can state it.
+The decimal points in <code>[1.0,2.0]</code> are what make that a double
+vector under the rules above, so a <code>~t</code> naming the type would
+only repeat them, and the key is emitted exactly where it is not a
+repetition: where reading the payload on its own would escalate it in
+turn.</p>
+<table>
+<thead>
+<tr class="header">
+<th>Value</th>
+<th>Payload</th>
+<th>Read on its own</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>character()</code></td>
+<td><code>[]</code></td>
+<td><code>list()</code>, since no element carries a type</td>
+</tr>
+<tr class="even">
+<td><code>1+2i</code></td>
+<td><code>{&quot;re&quot;:1.0,&quot;im&quot;:2.0}</code></td>
+<td>a named list</td>
+</tr>
+<tr class="odd">
+<td><code>as.raw(1)</code></td>
+<td><code>&quot;01&quot;</code></td>
+<td>a string</td>
+</tr>
+</tbody>
+</table>
+<p>Objects from S4 and S7 need it for the same reason, since
+<code>~t</code> names <code>&quot;S4&quot;</code> or <code>&quot;object&quot;</code> and
+there is no payload to read. Everywhere else — <code>Date</code>,
+<code>POSIXct</code>, factors, named vectors, matrices, data frames,
+classed lists — the lexemes already say it.</p>
+<p>What this asks a reader to know is that the presence of
+<code>~t</code> is a property of the value’s type rather than of the
+document, so emptying a vector brings it back.</p>
+<table>
+<colgroup>
+<col width="17%" />
+<col width="82%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>c(a = 1)</code></td>
+<td align="left"><code>{&quot;~a&quot;:{&quot;names&quot;:&quot;a&quot;},&quot;~v&quot;:1.0}</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>c(a = 1)[0]</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;double&quot;,&quot;~a&quot;:{&quot;names&quot;:{&quot;~t&quot;:&quot;character&quot;,&quot;~v&quot;:[]}},&quot;~v&quot;:[]}</code></td>
+</tr>
+</tbody>
+</table>
+<p>That is stable under ordinary edits and never depends on a sibling.
+It does leave the hand editor unguarded, since deleting a
+<code>.0</code> turns a double into an integer with nothing to catch it
+— but that was already true of every vector that does not escalate,
+which is what would have made the tag an inconsistent guard rather than
+a protective one.</p>
+<p>A reader recognizes the tagged form by any of <code>~t</code>,
+<code>~a</code> and <code>~v</code> at key position, which under the
+reservation rule above is the same test rather than a new one, since a
+single <code>~</code> at key position is a format tag either way. A
+<code>~t</code> that repeats what its payload says is still honored on
+the way in and dropped on the way out, so a document written by hand
+against the older shape reads, and then settles.</p>
+</div>
+<div id="types-with-no-lexeme" class="section level3">
+<h3>Types with no lexeme</h3>
+<p>Complex and raw escalate unconditionally, since neither has a plain
+JSON form to fall back to, and each replaces the ordinary payload with a
+shape of its own, which is why both keep their <code>~t</code>.</p>
+<p>A complex vector splits into two named parts, one per component. Each
+part is an ordinary double payload, so the unboxing rule and the
+<code>~z</code> tags apply to it independently, and a value missing only
+one component still comes back exact.</p>
+<table>
+<colgroup>
+<col width="40%" />
+<col width="60%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>1 + (0+2i)</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;complex&quot;,&quot;~v&quot;:{&quot;re&quot;:1.0,&quot;im&quot;:2.0}}</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>c(1 + (0+2i), 3 - (0+4i))</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;complex&quot;,&quot;~v&quot;:{&quot;re&quot;:[1.0,3.0],&quot;im&quot;:[2.0,-4.0]}}</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>complex(real = NA, imaginary = Inf)</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;complex&quot;,&quot;~v&quot;:{&quot;re&quot;:&quot;~zNA_real_&quot;,&quot;im&quot;:&quot;~zInf&quot;}}</code></td>
+</tr>
+</tbody>
+</table>
+<p>Two columns rather than an object per element, because it stays
+compact for long vectors and matches how R stores a complex vector. The
+part names are the ones Julia’s <code>JSON.jl</code> and the usual
+hand-rolled Python encoder already reach for, so the scalar case reads
+as a foreign consumer would write it. Writing R’s own <code>1+2i</code>
+notation is the one spelling to avoid, and it is the one
+<code>jsonlite</code> picks: it loses precision, and a value with a
+missing component collapses to <code>&quot;NA&quot;</code> with the other
+component gone entirely.</p>
+<p>A raw vector is one lower-case hexadecimal string, two digits per
+byte, which is the form every hex dump already uses and is shorter than
+an array of small integers.</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>as.raw(c(0, 15, 255))</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;raw&quot;,&quot;~v&quot;:&quot;000fff&quot;}</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="language-objects" class="section level3">
+<h3>Language objects</h3>
+<p>A call, an expression and a pairlist are values: each has value
+semantics, none can be shared observably, and none can contain itself.
+So they round-trip exactly, and this part of what would otherwise be
+refused costs no weakening of the first contract at all. What refusing
+them costs is every object carrying a recorded call, which is a caught
+condition and a fitted model among others.</p>
+<p>The tempting spelling is one deparsed string, because
+<code>{&quot;~q&quot;:&quot;mpg ~ wt&quot;}</code> reads better than anything structural
+can. It is also lossy, and lossy in the one way this package exists to
+prevent: a call may carry an arbitrary R object as a constant in its
+tree, and deparsing turns that constant into code that re-parses as
+something else.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">as.call</span>(<span class="fu">list</span>(<span class="fu">quote</span>(f), <span class="fu">c</span>(<span class="fl">1.1</span>, <span class="fl">2.2</span>)))</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="fu">identical</span>(<span class="fu">str2lang</span>(<span class="fu">paste</span>(<span class="fu">deparse</span>(x), <span class="at">collapse =</span> <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)), x)</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="co">#&gt; [1] FALSE</span></span></code></pre></div>
+<p>The element that went in as a double vector comes back as a call to
+<code>c</code>, and a constant needing more than 15 significant digits
+comes back rounded, since <code>deparse()</code> does not default to
+<code>digits17</code>. The <code>control = &quot;exact&quot;</code> setting closes
+neither hole; it wraps the result in <code>quote(...)</code>, which
+re-parses as a call to <code>quote</code>. Other shapes measured did
+survive — non-syntactic names, a tab inside a string,
+<code>x[[1]]$y@z</code>, and the <code>if</code> and
+<code>function</code> forms — so the hole is narrow. It is also silent,
+and it hands back a wrong value, which is the failure mode the format is
+built to refuse.</p>
+<p>The structural spelling costs no new machinery. A call is its
+elements, and <code>as.list()</code> already produces them with the
+argument names attached, so the payload is a partially named list, which
+the writer already emits and the reader already rebuilds. An expression
+is an array of language values, and a pairlist is the same shape as a
+call payload, with a missing default written as the empty symbol.</p>
+<table>
+<colgroup>
+<col width="39%" />
+<col width="60%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>quote(mpg ~ wt)</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;language&quot;,&quot;~v&quot;:[&quot;~:~&quot;,&quot;~:mpg&quot;,&quot;~:wt&quot;]}</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>quote(f(0.1, a = x))</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;language&quot;,&quot;~v&quot;:{&quot;&quot;:&quot;~:f&quot;,&quot;&quot;:0.1,&quot;a&quot;:&quot;~:x&quot;}}</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>formals(function(x, y = 2) NULL)</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;pairlist&quot;,&quot;~v&quot;:{&quot;x&quot;:&quot;~:&quot;,&quot;y&quot;:2.0}}</code></td>
+</tr>
+</tbody>
+</table>
+<p>A call is mostly symbols, so their spelling decides whether the
+format stays readable. The tagged-object form is correct and costs more
+than twice the bytes.</p>
+<table>
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Spelling</th>
+<th><code>quote(mpg ~ wt)</code></th>
+<th>Bytes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>prefix tag</td>
+<td><code>{&quot;~t&quot;:&quot;language&quot;,&quot;~v&quot;:[&quot;~:~&quot;,&quot;~:mpg&quot;,&quot;~:wt&quot;]}</code></td>
+<td>45</td>
+</tr>
+<tr class="even">
+<td>tagged object</td>
+<td><code>{&quot;~t&quot;:&quot;language&quot;,&quot;~v&quot;:[{&quot;~t&quot;:&quot;symbol&quot;,&quot;~v&quot;:&quot;~&quot;},{&quot;~t&quot;:&quot;symbol&quot;,&quot;~v&quot;:&quot;mpg&quot;},{&quot;~t&quot;:&quot;symbol&quot;,&quot;~v&quot;:&quot;wt&quot;}]}</code></td>
+<td>102</td>
+</tr>
+</tbody>
+</table>
+<p>So a symbol takes the prefix tag, which is the device the format
+already uses for typed <code>NA</code> and the non-finite doubles, and
+is safe here for the same reason: any ordinary string beginning with
+<code>~</code> is escaped by doubling, so a single-<code>~</code> string
+can never originate from user data. The empty symbol — what
+<code>x[, 1]</code> holds where a row index would go, and what a formals
+entry with no default holds — is the tag with nothing after it. Depth is
+not a limit in practice either: a 10000-deep call round-trips, where the
+deparsed form overflows the parser’s context stack in
+<code>str2lang()</code> at 2000.</p>
+<p>Attributes ride the ordinary rule, which is what carries the
+<code>.Environment</code> of a formula, so <code>y ~ x</code>
+round-trips exactly once an environment does. A <code>{</code> block
+parsed with <code>keep.source = TRUE</code> reaches one step further
+down, where five <code>srcref</code> attributes point at one
+<code>srcfile</code> environment holding the source text; none of that
+is recorded, because a source reference is dropped wherever a parser
+attached one.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">json_write_str</span>(y <span class="sc">~</span> x)</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~a\&quot;:{\&quot;class\&quot;:\&quot;formula\&quot;,\&quot;.Environment\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;</span><span class="re">}}}</span><span class="co">,\&quot;~v\&quot;:[\&quot;~:~\&quot;,\&quot;~:y\&quot;,\&quot;~:x\&quot;]}&quot;</span></span></code></pre></div>
+</div>
+<div id="object-systems" class="section level3">
+<h3>Object systems</h3>
+<p>S3 falls out with no special case at all: an S3 object is a base type
+plus a <code>class</code> attribute.</p>
+<p>S4 falls out too, since slots are attributes, with two riders — the
+S4 bit is recorded separately because <code>typeof()</code> reports
+<code>S4</code> rather than the data type, and the reader can only
+rebuild if the class definition is loadable.</p>
+<p>S7 needs exactly one special case. Properties are stored as
+attributes and come through the ordinary rule, but the
+<code>S7_class</code> attribute holds the class generator, and a walk
+into one lands in S7’s own machinery rather than in anything the class
+declares — a base class holds a validator closing over the promise that
+built it. So a class is recorded by what identifies it rather than by
+its contents. With that in place an S7 object round-trips directly,
+which removes the need for a hand-written record layer above it.</p>
+<p>Which of the two forms a class takes is decided by
+<code>package</code>, which S7 sets for a class defined in a package and
+leaves <code>NULL</code> for every class defined outside one. That is
+the same question as whether a name finds the class again in another
+session, so a package-scoped class is recorded as the class and package
+it names, and a class with no package carries its definition.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="st">&quot;Point&quot;</span><span class="fu">,</span> <span class="dt">&quot;package&quot;</span><span class="fu">:</span> <span class="st">&quot;somepkg&quot;</span><span class="fu">}}</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="st">&quot;Point&quot;</span><span class="fu">,</span> <span class="dt">&quot;parent&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="st">&quot;S7_object&quot;</span><span class="fu">},</span> <span class="dt">&quot;properties&quot;</span><span class="fu">:</span> <span class="fu">{},</span> <span class="dt">&quot;abstract&quot;</span><span class="fu">:</span> <span class="kw">false</span><span class="fu">,</span> <span class="dt">&quot;constructor&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;~t&quot;</span><span class="fu">:</span> <span class="st">&quot;closure&quot;</span><span class="fu">,</span> <span class="dt">&quot;~v&quot;</span><span class="fu">:</span> <span class="fu">{}},</span> <span class="dt">&quot;validator&quot;</span><span class="fu">:</span> <span class="kw">null</span><span class="fu">}}</span></span></code></pre></div>
+<p>Reading <code>NULL</code> as the global environment is what the
+second form retires. A class defined at top level passed that lookup in
+the session that wrote it and failed in every other, so findability at
+write time said nothing about findability at read time — and refusing
+such a class where it is written, which is what the <code>R6</code> side
+does, would have separated unfixable documents from fixable ones rather
+than predicting the read.</p>
+<p>Each class the definition names is recorded the same way, by what
+identifies it rather than by walking in. A class S7 itself binds is
+recorded by the name it holds in that namespace, which covers
+<code>class_character</code>, <code>class_numeric</code> and
+<code>S7_object</code> alike; an S3 class by its class vector, since the
+wrapper <code>new_S3_class()</code> puts around one is built on demand
+and bound nowhere; a union by its members; and a class of your own by
+the two forms above, recursively.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="st">&quot;class_character&quot;</span><span class="fu">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;s3&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;factor&quot;</span><span class="ot">]</span><span class="fu">}}</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;union&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="st">&quot;class_double&quot;</span><span class="fu">}</span><span class="ot">,</span> <span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="st">&quot;class_character&quot;</span><span class="fu">}</span><span class="ot">]</span><span class="fu">}}</span></span></code></pre></div>
+<p>The class vector is an ordinary attribute and the
+<code>S7_class</code> record resolves without reading it, so the two can
+disagree in a document that has been edited. They are compared where the
+object is rebuilt, since dispatch would otherwise follow the one while
+the properties came from the other.</p>
+<p>Both of those rebuild the object from the document rather than
+construct one, which reaches past the point where the class would have
+decided whether to produce it at all: an S4 object arrives without its
+<code>initialize</code> method having run, and an S7 object without its
+<code>constructor</code>. The check the class does supply is therefore
+run where the object is rebuilt — <code>methods::validObject()</code> on
+the S4 side and <code>S7::validate()</code> on the S7 side — which is
+what stands between a hand-edited document and a value the class itself
+rejects. Neither disturbs a good round trip, a document written from a
+valid object describing a valid one, and the S7 call earns its keep
+twice over, since it checks property types as well and so catches a
+property the document omits or spells as something else. The lookup that
+finds the class is allowed to find one and not to fetch one, so a
+document naming a package this session has not loaded reads the way it
+did before the check existed rather than stopping at it.</p>
+<p>What neither call replaces is the construction it reached past. A
+slot or property that an <code>initialize</code> method or a
+<code>constructor</code> would have derived comes back as the document
+spells it, so a class computing <code>label</code> from
+<code>celsius</code> revives with the two out of step wherever a
+document has them that way, and only a validator comparing them will say
+so.</p>
+<p>An R6 generator is a name, and is recorded the way a package-scoped
+S7 class is: by the class it declares rather than by its contents.
+Nothing here embeds, since the environment a generator declares its
+class in is the one it is looked up in, and a generator that environment
+does not find again is refused where it is written.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~r6class&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;Derived&quot;</span><span class="ot">,</span> <span class="st">&quot;Base&quot;</span><span class="ot">,</span> <span class="st">&quot;R6&quot;</span><span class="ot">]</span><span class="fu">,</span> <span class="dt">&quot;package&quot;</span><span class="fu">:</span> <span class="st">&quot;somepkg&quot;</span><span class="fu">}}</span></span></code></pre></div>
+<p>The class has to be recoverable for the document to be readable, so a
+generator that names no class, or that was built inside a function, is
+refused where it is written. Finding it again means scanning the
+environment the class was defined in for an <code>is.R6Class()</code>
+object whose <code>$classname</code> matches, then checking that the
+chain it declares through <code>get_inherit()</code> is the one
+recorded. Scanning is necessary rather than fussy, because the generator
+variable need not be named after the class — and for the same reason it
+can turn up two, which is an error rather than a coin toss. That lookup
+runs on the way out as well as on the way in, so a class vector no
+generator in that environment declares is caught where it is written
+rather than where it is read.</p>
+<p>An R6 instance is a different question, and the answer is that this
+package does not have one to give. Every other type in scope has a value
+its own type system supplies: a vector is its data, an S3 object is a
+base type plus attributes, and an S4 object is its slots exactly as an
+S7 object is its properties, which is why
+<code>new(&quot;Pt&quot;, x = 1, y = 2)</code> is a complete description of one.
+An R6 object is defined instead by what its methods guarantee, and its
+private fields are private precisely because they are not part of that.
+Recording an instance as the bindings it happens to hold is therefore an
+assertion about the class that only the class can make, so writing one
+is refused, naming the class and the method that would settle it.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>Counter <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Counter&quot;</span>, <span class="at">public =</span> <span class="fu">list</span>(<span class="at">n =</span> <span class="dv">0</span>))</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">list</span>(<span class="at">a =</span> <span class="dv">1</span>, <span class="at">b =</span> Counter<span class="sc">$</span><span class="fu">new</span>()))</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a><span class="co">#&gt; ! an `R6` instance needs a `json_state()` method for class `Counter` at `x$b`</span></span></code></pre></div>
+<p>Worth separating from what this resembles. Recording a constructor
+and the arguments it was called with is sound, because that mapping is
+the class’s own public interface; reaching past <code>initialize</code>
+to reinstate private bindings is the opposite of the encapsulation the
+class exists to provide. So the mechanism is offered rather than
+assumed, as the <code>r6_state()</code> and <code>r6_restore()</code>
+pair a class author opts in with, and what it writes is an ordinary
+extension record rather than a tag of its own.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~x&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;Derived&quot;</span><span class="ot">,</span> <span class="st">&quot;Base&quot;</span><span class="ot">,</span> <span class="st">&quot;R6&quot;</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>        <span class="dt">&quot;state&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;package&quot;</span><span class="fu">:</span> <span class="st">&quot;somepkg&quot;</span><span class="fu">,</span></span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>                  <span class="dt">&quot;public&quot;</span><span class="fu">:</span>  <span class="fu">{</span><span class="dt">&quot;n&quot;</span><span class="fu">:</span> <span class="dv">6</span><span class="fu">,</span> <span class="dt">&quot;tag&quot;</span><span class="fu">:</span> <span class="st">&quot;t1&quot;</span><span class="fu">},</span></span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>                  <span class="dt">&quot;private&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;extra&quot;</span><span class="fu">:</span> <span class="st">&quot;e&quot;</span><span class="fu">,</span> <span class="dt">&quot;seed&quot;</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">}}}}</span></span></code></pre></div>
+<p>Restoring one, verified end to end on a two-level class with private
+fields at both levels, an inherited method and an active binding:</p>
+<ol style="list-style-type: decimal">
+<li>Find the generator, by the lookup above. The recorded
+<code>class</code> is the instance’s whole class vector, so the
+generator that answers has to declare the same chain. A class prepended
+on the instance survives as the part of the vector no generator accounts
+for.</li>
+<li>Allocate without running <code>initialize</code>. Rebuild a twin
+generator from the original’s <code>public_fields</code>,
+<code>public_methods</code>, <code>private_*</code>,
+<code>active</code>, <code>inherit</code> and <code>parent_env</code>,
+with a no-op <code>initialize</code> shadowing the real one — and the
+inherited one, which is what bites on subclasses — and
+<code>lock_objects = FALSE</code>.</li>
+<li>Populate and re-lock. Assign public fields into the object and
+private fields into <code>.__enclos_env__$private</code>, then call
+<code>lockEnvironment()</code> where the generator’s
+<code>lock_objects</code> asks for it.</li>
+</ol>
+<p>The lock therefore comes from the generator rather than from the
+instance the document was written from. A lock a user placed on one
+object, or on a single binding inside it, is not recorded and does not
+come back: the payload carries field values and says nothing about how
+they are bound.</p>
+<p>The generator settles the shape too. Where it locks its instances,
+recorded state it no longer declares has nowhere to go, so that state is
+dropped with a warning naming it rather than bound into an object no
+constructor could produce. The mirror case needs nothing, since a field
+the generator has gained since the document was written arrives at its
+default. Where instances take new bindings the recorded state is
+restored whole, because a field assigned to one by hand is state like
+any other.</p>
+<p>Which is the argument for making this the author’s call rather than
+the default, made from the inside: three paragraphs of behavior that
+only the class knows the right answer to, and
+<code>vignette(&quot;r6&quot;)</code> walks through deciding it.</p>
+<p>An external pointer stays out. What the writer refuses, it refuses
+loudly, naming the path it stopped at.</p>
+<p>A non-portable R6 class is on the far side of that line even for an
+author who has opted in. With <code>portable = FALSE</code> the object
+environment is also the environment its methods close over, so it binds
+<code>self</code> and <code>private</code> beside the fields and the
+generator stops accounting for everything that is not state. An instance
+of one is refused where it is written, naming the class, since making
+the class portable is what changes the answer.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>Bound <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Bound&quot;</span>, <span class="at">portable =</span> <span class="cn">FALSE</span>, <span class="at">public =</span> <span class="fu">list</span>(<span class="at">n =</span> <span class="dv">1</span>))</span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>json_state.Bound <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">r6_state</span>(x)</span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a></span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">list</span>(<span class="at">a =</span> <span class="dv">1</span>, <span class="at">b =</span> Bound<span class="sc">$</span><span class="fu">new</span>()))</span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a><span class="co">#&gt; ! cannot write an instance of the non-portable R6 class `Bound/R6` at `x$b`</span></span></code></pre></div>
+<p>A reference class instance is refused on the second half of that
+argument alone. Fields are declared, so <code>Class$fields()</code> says
+what the representation is where an <code>R6</code> class says nothing;
+the object is still a reference whose <code>initialize</code> may
+establish an invariant and whose fields are as good a place for a
+credential as a private binding, so recording the bindings is still an
+assertion only the class can make. A method on the concrete class
+settles it, as does one on any class between that and
+<code>envRefClass</code>, which is the rung the refusal itself sits on.
+The generator is refused rather than recorded by name, unlike the
+<code>R6</code> and S7 ones above, because a walk into one reaches the
+internals of the <code>methods</code> package rather than anything the
+class declares; recording it the way those two are recorded is open.</p>
+<p>The refusal follows the label rather than the shape, which is worth
+stating outright because the shape on its own is written. An environment
+carrying a class attribute of your own making claims nothing about its
+instances, so it takes the environment rule below and its bindings reach
+the document. That is the rule holding rather than a hole in it — an
+environment is its contents, which is what base R’s
+<code>serialize()</code> records too — and a <code>json_state()</code>
+method is how a value of that shape says otherwise.</p>
+</div>
+<div id="environments" class="section level3">
+<h3>Environments</h3>
+<p>An environment is written on a ladder, and only the bottom rung
+writes contents. The rungs are the ones base R’s
+<code>serialize()</code> already recognizes — the global, base and empty
+environments, a namespace, and a package environment — plus the imports
+environment of a namespace, which constructive names and base R does
+not. Each is written as the name that finds it again, in the spelling R
+itself prints: <code>namespace:stats</code> beside
+<code>package:stats</code> and <code>imports:stats</code>.</p>
+<table>
+<colgroup>
+<col width="39%" />
+<col width="60%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>globalenv()</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;environment&quot;,&quot;~v&quot;:{&quot;name&quot;:&quot;R_GlobalEnv&quot;}}</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>baseenv()</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;environment&quot;,&quot;~v&quot;:{&quot;name&quot;:&quot;base&quot;}}</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>as.environment(&quot;package:stats&quot;)</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;environment&quot;,&quot;~v&quot;:{&quot;name&quot;:&quot;package:stats&quot;}}</code></td>
+</tr>
+</tbody>
+</table>
+<p>The name itself comes from <code>environmentName()</code>, which is
+base R’s own spelling of that ladder and answers for every rung above,
+so a rung base adds is a rung this format gains. What is added on top is
+a filter: a rung is a rung only where the name resolves <em>back</em> to
+the same object, which is the rule the <code>R6</code> generator lookup
+already runs on the way out. That closes the one hole base leaves open
+here, since <code>attr(e, &quot;name&quot;) &lt;- &quot;package:stats&quot;</code> on an
+environment of your own makes both <code>R_IsPackageEnv()</code> and
+<code>environmentName()</code> say yes. Resolving on the way out also
+never loads a package, because the name it is resolving may be one a
+value of your own made up.</p>
+<p>Everything else is written by what it binds, with the parent written
+by the same rule, so the walk terminates at a named rung rather than
+running to <code>emptyenv()</code> through everything in between. That
+is what keeps a document small: an environment under
+<code>.GlobalEnv</code> records the marker rather than your
+workspace.</p>
+<p>Bindings are ordered by their bytes rather than by <code>ls()</code>,
+whose collation is a locale setting — <code>c(&quot;B&quot;, &quot;a&quot;)</code> sorts one
+way under <code>C</code> and the other under <code>en_US</code>, and one
+environment writing as two documents on two machines is the opposite of
+diffable.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a>counter <span class="ot">&lt;-</span> <span class="fu">new.env</span>(<span class="at">parent =</span> <span class="fu">asNamespace</span>(<span class="st">&quot;stats&quot;</span>))</span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>counter<span class="sc">$</span>n <span class="ot">&lt;-</span> <span class="dv">1</span><span class="dt">L</span></span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a><span class="fu">json_write_str</span>(counter)</span>
+<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;namespace:stats\&quot;}},\&quot;bindings\&quot;:{\&quot;n\&quot;:1</span><span class="re">}}}</span><span class="co">&quot;</span></span></code></pre></div>
+<p>The locked bit and locked bindings ride alongside, since nothing else
+can supply them once the environment is rebuilt — where an
+<code>R6</code> instance takes its lock from the generator, a bare
+environment has no generator to ask.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="fu">lockEnvironment</span>(counter, <span class="at">bindings =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a></span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a><span class="fu">json_write_str</span>(counter)</span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;namespace:stats\&quot;}},\&quot;bindings\&quot;:{\&quot;n\&quot;:1},\&quot;locked\&quot;:true,\&quot;locked_bindings\&quot;:\&quot;n\&quot;}}&quot;</span></span></code></pre></div>
+<p>Two bindings are refused rather than recorded, and for the same
+reason: reading either one runs code. A promise would have to be forced,
+and an environment captured inside a function holds its arguments
+unforced, so forcing one on the writer’s own initiative can error or do
+arbitrary work at write time. An active binding would have to be called,
+and recording what it returned would hand back a plain binding wearing
+its value. Base R writes both unevaluated; this format refuses them, and
+says where.</p>
+<p>A name that is not available on the way back is replaced by the
+global environment with a warning, which is what base R already does
+through <code>findPackageEnv()</code> and <code>..getNamespace()</code>.
+Substituting silently was never on the table.</p>
+</div>
+<div id="closures" class="section level3">
+<h3>Closures</h3>
+<p>A closure compares by its parts rather than by reference, which is
+the fact this section rests on and is easy to assume the other way
+round.</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="fu">identical</span>(<span class="cf">function</span>(x) x <span class="sc">+</span> <span class="dv">1</span>, <span class="cf">function</span>(x) x <span class="sc">+</span> <span class="dv">1</span>)</span>
+<span id="cb21-2"><a href="#cb21-2" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<p>So there is nothing to weaken. Formals, body and environment are what
+a closure is; the first two are language objects and the third is an
+environment, which means a closure needs no machinery beyond the two
+sections above and inherits the environment ladder whole. It round-trips
+exactly wherever the environment it closes over is recorded by name, and
+up to equivalence wherever that environment is recorded by contents.</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a><span class="fu">show_documents</span>(mean)</span></code></pre></div>
+<table>
+<colgroup>
+<col width="3%" />
+<col width="96%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>mean</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;closure&quot;,&quot;~v&quot;:{&quot;formals&quot;:{&quot;~t&quot;:&quot;pairlist&quot;,&quot;~v&quot;:{&quot;x&quot;:&quot;~:&quot;,&quot;...&quot;:&quot;~:&quot;}},&quot;body&quot;:{&quot;~t&quot;:&quot;language&quot;,&quot;~v&quot;:[&quot;~:UseMethod&quot;,[&quot;mean&quot;]]},&quot;environment&quot;:{&quot;~t&quot;:&quot;environment&quot;,&quot;~v&quot;:{&quot;name&quot;:&quot;namespace:base&quot;}}}}</code></td>
+</tr>
+</tbody>
+</table>
+<p>A closure over a frame of its own records that frame like any other
+environment, so the walk stops at the first rung it reaches rather than
+running to <code>emptyenv()</code> through the workspace.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a>counter <span class="ot">&lt;-</span> <span class="fu">new.env</span>(<span class="at">parent =</span> <span class="fu">globalenv</span>())</span>
+<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a>counter<span class="sc">$</span>i <span class="ot">&lt;-</span> <span class="dv">1</span><span class="dt">L</span></span>
+<span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a></span>
+<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">local</span>(<span class="cf">function</span>() i <span class="sc">+</span> <span class="dv">1</span>, counter))</span>
+<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;closure\&quot;,\&quot;~v\&quot;:{\&quot;formals\&quot;:null,\&quot;body\&quot;:{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:+\&quot;,\&quot;~:i\&quot;,[1.0]]},\&quot;environment\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;}},\&quot;bindings\&quot;:{\&quot;i\&quot;:1</span><span class="re">}}}</span><span class="co">}}&quot;</span></span></code></pre></div>
+<p>A primitive closes over nothing and has no body to write, so it is
+recorded by the name that finds it again. That is what base R does too,
+and note what it does <em>not</em> do: a closure that happens to be a
+package export is written by value like any other rather than as
+<code>stats::median</code>, because the environment rung already does
+the work a name lookup would.</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a><span class="fu">show_documents</span>(sum, <span class="st">`</span><span class="at">if</span><span class="st">`</span>)</span></code></pre></div>
+<table>
+<thead>
+<tr class="header">
+<th align="left">R value</th>
+<th align="left">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>sum</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;builtin&quot;,&quot;~v&quot;:&quot;sum&quot;}</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>if</code></td>
+<td align="left"><code>{&quot;~t&quot;:&quot;special&quot;,&quot;~v&quot;:&quot;if&quot;}</code></td>
+</tr>
+</tbody>
+</table>
+<p>No source reference is recorded. A parser attaches
+<code>srcref</code> to a function definition, to a <code>{</code> block
+and to what <code>parse()</code> returns, and <code>identical()</code>
+ignores all three by default, so dropping them costs nothing against the
+first contract and keeps a document diffable.</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" tabindex="-1"></a><span class="fu">formals</span>(identical)<span class="sc">$</span>ignore.srcref</span>
+<span id="cb25-2"><a href="#cb25-2" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<p>Keeping one would be worse than verbose. A <code>srcref</code>
+carries its <code>srcfile</code>, which is an environment holding the
+source text it came from, so a function parsed from a file would arrive
+with that file beside it. A byte-compiled closure is written from
+<code>body()</code>, which is the source tree it was compiled from, and
+left to the compiler to compile again; nothing here records
+bytecode.</p>
+<p>Two shapes stay refused, and neither is a closure’s own doing. An
+argument the function was called with stays a promise in its frame
+whether or not it has been forced, so a closure over such a frame meets
+the promise rule above.</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a>adder <span class="ot">&lt;-</span> <span class="cf">function</span>(n) {</span>
+<span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a>  <span class="fu">force</span>(n)</span>
+<span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a>  <span class="cf">function</span>(x) x <span class="sc">+</span> n</span>
+<span id="cb26-4"><a href="#cb26-4" tabindex="-1"></a>}</span>
+<span id="cb26-5"><a href="#cb26-5" tabindex="-1"></a></span>
+<span id="cb26-6"><a href="#cb26-6" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">adder</span>(<span class="dv">3</span>))</span>
+<span id="cb26-7"><a href="#cb26-7" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb26-8"><a href="#cb26-8" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;promise&#39; at `x$environment$bindings$n`</span></span></code></pre></div>
+<p>And a closure a method stored back into the object it belongs to
+reaches that object again through the frame it closes over, which is a
+genuine cycle and is reported as one. Both are the environment rules
+holding rather than a limit on closures, and both are what the extension
+protocol below is for.</p>
+</div>
+<div id="references" class="section level3">
+<h3>References</h3>
+<p>Cycles and observable sharing are possible only through reference
+types. A value list cannot contain itself, because
+<code>l$self &lt;- l</code> stores a copy, and copy-on-write means value
+types cannot tell whether they are shared. So this question arrives with
+environments and with R6, and with nothing else.</p>
+<p>Sharing needs no cycle and no <code>R6</code>. Two closures returned
+from one factory share their environment, which is the ordinary way to
+write a stateful pair in R, and without reference identity the pair
+comes back over two separate frames, so setting through one no longer
+moves what the other reads.</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" tabindex="-1"></a>mk <span class="ot">&lt;-</span> <span class="fu">local</span>(</span>
+<span id="cb27-2"><a href="#cb27-2" tabindex="-1"></a>  <span class="cf">function</span>() {</span>
+<span id="cb27-3"><a href="#cb27-3" tabindex="-1"></a>    i <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb27-4"><a href="#cb27-4" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">get =</span> <span class="cf">function</span>() i, <span class="at">set =</span> <span class="cf">function</span>(v) i <span class="ot">&lt;&lt;-</span> v)</span>
+<span id="cb27-5"><a href="#cb27-5" tabindex="-1"></a>  },</span>
+<span id="cb27-6"><a href="#cb27-6" tabindex="-1"></a>  <span class="fu">globalenv</span>()</span>
+<span id="cb27-7"><a href="#cb27-7" tabindex="-1"></a>)</span>
+<span id="cb27-8"><a href="#cb27-8" tabindex="-1"></a></span>
+<span id="cb27-9"><a href="#cb27-9" tabindex="-1"></a>pair <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(<span class="fu">json_write_str</span>(<span class="fu">mk</span>()))</span>
+<span id="cb27-10"><a href="#cb27-10" tabindex="-1"></a>pair<span class="sc">$</span><span class="fu">set</span>(<span class="dv">2</span>)</span>
+<span id="cb27-11"><a href="#cb27-11" tabindex="-1"></a>pair<span class="sc">$</span><span class="fu">get</span>()</span>
+<span id="cb27-12"><a href="#cb27-12" tabindex="-1"></a><span class="co">#&gt; [1] 2</span></span></code></pre></div>
+<p>Three pieces, and the third is what the first two are for:</p>
+<ul>
+<li><strong>A reference table.</strong> Every reference the walk has
+reached, keyed by its <code>SEXP</code>. Reaching one a second time
+numbers the first write with <code>~id</code> and writes
+<code>{&quot;~ref&quot;: n}</code> in its place. The number is minted where the
+repeat happens rather than where the first write did, so a document
+holding no sharing carries no marker and reads byte for byte as it would
+have without any of this. Base R’s own <code>serialize()</code> keeps
+such a table for environments, which is the axis this used to sit behind
+<code>saveRDS</code> on.</li>
+<li><strong>Numbering before descending.</strong> The reader creates an
+environment and numbers it before reading what it binds, which is where
+a reference back to it comes from. That is what turns a cycle from an
+error into a document: <code>function() {e &lt;- new.env(); e}</code>
+returns an environment whose parent frame binds it back, and it now
+writes and comes back bound the same way. Attributes are read before
+contents for the same reason, since that is the order they were written
+in and a reference only ever points backwards.</li>
+<li><strong>What is still refused.</strong> A cycle closing through an
+object the extension protocol builds in one call — any class with a
+<code>json_state()</code> method, an opted-in <code>R6</code> one among
+them — since a constructor cannot be handed an object that already
+exists. The error names both ends of it. Sharing such an object is fine;
+only the cycle is not, which leaves the chromote shape out
+(<code>Chromote</code> holds <code>sessions</code>, each
+<code>ChromoteSession</code> holds <code>parent</code>), and both of
+those wrap a live browser process anyway.</li>
+</ul>
+<p>The cycle in that second bullet is not a corner case: it is what any
+function returning an environment it created produces.</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a>frame <span class="ot">&lt;-</span> <span class="fu">local</span>(</span>
+<span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a>  <span class="cf">function</span>() {</span>
+<span id="cb28-3"><a href="#cb28-3" tabindex="-1"></a>    inner <span class="ot">&lt;-</span> <span class="fu">new.env</span>()</span>
+<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a>    inner</span>
+<span id="cb28-5"><a href="#cb28-5" tabindex="-1"></a>  },</span>
+<span id="cb28-6"><a href="#cb28-6" tabindex="-1"></a>  <span class="fu">globalenv</span>()</span>
+<span id="cb28-7"><a href="#cb28-7" tabindex="-1"></a>)</span>
+<span id="cb28-8"><a href="#cb28-8" tabindex="-1"></a></span>
+<span id="cb28-9"><a href="#cb28-9" tabindex="-1"></a>back <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(<span class="fu">json_write_str</span>(<span class="fu">frame</span>()))</span>
+<span id="cb28-10"><a href="#cb28-10" tabindex="-1"></a></span>
+<span id="cb28-11"><a href="#cb28-11" tabindex="-1"></a><span class="fu">identical</span>(<span class="fu">parent.env</span>(back)<span class="sc">$</span>inner, back)</span>
+<span id="cb28-12"><a href="#cb28-12" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+</div>
+</div>
+<div id="reading-foreign-json" class="section level2">
+<h2>Reading foreign JSON</h2>
+<p>One grammar, applied to whatever is handed to us. Nothing is inferred
+from content; only from the lexeme and the shape.</p>
+<table>
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>JSON</th>
+<th>R</th>
+<th>inferred from</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>&quot;abc&quot;</code></td>
+<td><code>&quot;abc&quot;</code>, always character</td>
+<td>nothing</td>
+</tr>
+<tr class="even">
+<td><code>&quot;~zNA_real_&quot;</code></td>
+<td><code>NA_real_</code></td>
+<td>exact match against the known tags</td>
+</tr>
+<tr class="odd">
+<td><code>&quot;~~foo&quot;</code></td>
+<td><code>&quot;~foo&quot;</code></td>
+<td>the escape rule</td>
+</tr>
+<tr class="even">
+<td><code>&quot;~foo&quot;</code>, <code>&quot;~/data&quot;</code></td>
+<td>the string itself</td>
+<td>nothing; <code>f</code> and <code>/</code> are not reserved</td>
+</tr>
+<tr class="odd">
+<td><code>123</code></td>
+<td>integer</td>
+<td>the lexeme; yyjson reports <code>SINT</code> /
+<code>UINT</code></td>
+</tr>
+<tr class="even">
+<td><code>1.0</code>, <code>1e3</code></td>
+<td>double</td>
+<td>the lexeme carries <code>.</code> or an exponent</td>
+</tr>
+<tr class="odd">
+<td><code>true</code></td>
+<td>logical</td>
+<td>nothing</td>
+</tr>
+<tr class="even">
+<td><code>null</code></td>
+<td><code>NULL</code></td>
+<td>nothing</td>
+</tr>
+<tr class="odd">
+<td><code>[1,2,3]</code></td>
+<td>integer vector</td>
+<td>shape</td>
+</tr>
+<tr class="even">
+<td><code>[[1],[2]]</code>, <code>[1,&quot;a&quot;]</code></td>
+<td>list</td>
+<td>shape</td>
+</tr>
+<tr class="odd">
+<td><code>{…}</code></td>
+<td>named list</td>
+<td>nothing</td>
+</tr>
+<tr class="even">
+<td><code>&quot;~:mpg&quot;</code></td>
+<td>the symbol <code>mpg</code></td>
+<td>the reserved discriminator for a symbol</td>
+</tr>
+<tr class="odd">
+<td><code>&quot;~zBogus&quot;</code></td>
+<td>an error</td>
+<td>a reserved discriminator naming no known tag</td>
+</tr>
+<tr class="even">
+<td><code>{&quot;~foo&quot;: …}</code></td>
+<td>an error</td>
+<td>the reserved prefix at key position</td>
+</tr>
+<tr class="odd">
+<td><code>{&quot;~ref&quot;: 3}</code></td>
+<td>an error unless something carries <code>&quot;~id&quot;: 3</code></td>
+<td>the reference table</td>
+</tr>
+</tbody>
+</table>
+<p>No <code>NA</code> from <code>&quot;NA&quot;</code>, no <code>Inf</code> from
+<code>&quot;Inf&quot;</code>, no date from an ISO-8601-looking string, no data
+frame from an array of objects. There is no strict mode and no lossy
+mode, because there is only one set of rules.</p>
+<p>Numbers beyond what R holds exactly were left open while the format
+was being settled, and the resolution is to read them as doubles and say
+so. Silence would have been the one unacceptable answer, since the whole
+point is that a document never comes back quietly changed.</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" tabindex="-1"></a><span class="fu">json_read_str</span>(<span class="st">&quot;[1, 9007199254740993]&quot;</span>)</span>
+<span id="cb29-2"><a href="#cb29-2" tabindex="-1"></a><span class="co">#&gt; Warning: numbers outside the range R can hold exactly were read as doubles:</span></span>
+<span id="cb29-3"><a href="#cb29-3" tabindex="-1"></a><span class="co">#&gt;   9007199254740993</span></span>
+<span id="cb29-4"><a href="#cb29-4" tabindex="-1"></a><span class="co">#&gt; [1] 1.000000e+00 9.007199e+15</span></span></code></pre></div>
+</div>
+<div id="api" class="section level2">
+<h2>API</h2>
+<p>Small on purpose.</p>
+<pre><code>json_write(x, path)        json_read(path)
+json_write_str(x)          json_read_str(txt)
+json_state(x)              json_revive(class, state)     # extension protocol</code></pre>
+<p>Both writers take <code>pretty</code>, which indents, and
+<code>typed</code>, which at <code>FALSE</code> drops the annotations
+for a consumer that brings its own schema.</p>
+</div>
+<div id="extension-protocol" class="section level2">
+<h2>Extension protocol</h2>
+<p>For classes the default does not fit — <code>initialize</code> opens
+a connection, a field holds a handle, a reference must be recorded as a
+key rather than a value — a pair of generics, modeled on the
+<code>__getstate__</code> and <code>__setstate__</code> methods of
+Python’s pickle. A <code>json_state()</code> method returns a plain list
+of what to persist, and a <code>json_revive()</code> method turns that
+list back into the object.</p>
+<p>A class holding a closure built inside its own constructor is a case
+in point. The closure is writable, but the frame it closes over binds
+the constructor’s argument, and an argument is a promise however far it
+has been forced.</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" tabindex="-1"></a>adder_class <span class="ot">&lt;-</span> <span class="cf">function</span>(n) {</span>
+<span id="cb31-2"><a href="#cb31-2" tabindex="-1"></a>  <span class="fu">structure</span>(<span class="fu">list</span>(<span class="at">n =</span> n, <span class="at">f =</span> <span class="cf">function</span>(x) x <span class="sc">+</span> n), <span class="at">class =</span> <span class="st">&quot;adder_class&quot;</span>)</span>
+<span id="cb31-3"><a href="#cb31-3" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">adder_class</span>(<span class="dv">3</span>))</span>
+<span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;promise&#39; at `x$f$environment$bindings$n`</span></span></code></pre></div>
+<p>What identifies this object is <code>n</code>; the closure is derived
+from it, so the method records the one and drops the other.</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" tabindex="-1"></a>json_state.adder_class <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">list</span>(<span class="at">n =</span> x<span class="sc">$</span>n)</span>
+<span id="cb33-2"><a href="#cb33-2" tabindex="-1"></a></span>
+<span id="cb33-3"><a href="#cb33-3" tabindex="-1"></a>json_revive.adder_class <span class="ot">&lt;-</span> <span class="cf">function</span>(class, state) <span class="fu">adder_class</span>(state<span class="sc">$</span>n)</span>
+<span id="cb33-4"><a href="#cb33-4" tabindex="-1"></a></span>
+<span id="cb33-5"><a href="#cb33-5" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="fu">json_write_str</span>(<span class="fu">adder_class</span>(<span class="dv">3</span>))</span>
+<span id="cb33-6"><a href="#cb33-6" tabindex="-1"></a>doc</span>
+<span id="cb33-7"><a href="#cb33-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~x\&quot;:{\&quot;class\&quot;:\&quot;adder_class\&quot;,\&quot;state\&quot;:{\&quot;n\&quot;:3.0</span><span class="re">}}}</span><span class="co">&quot;</span></span>
+<span id="cb33-8"><a href="#cb33-8" tabindex="-1"></a></span>
+<span id="cb33-9"><a href="#cb33-9" tabindex="-1"></a><span class="fu">json_read_str</span>(doc)<span class="sc">$</span><span class="fu">f</span>(<span class="dv">4</span>)</span>
+<span id="cb33-10"><a href="#cb33-10" tabindex="-1"></a><span class="co">#&gt; [1] 7</span></span></code></pre></div>
+<p>The default methods implement everything above, and dispatch works
+for all three class-vector-carrying object systems. A method is looked
+for on every class the value dispatches on, so an S4 object and a
+reference class instance are matched against their inheritance chain
+rather than the concrete class alone. On the way back, dispatch happens
+on the recorded class vector via an empty object carrying it, which is
+why the method signature starts with the class rather than the object
+being rebuilt, and which is what reaches a superclass method from the
+read side too.</p>
+<p>Whatever a method returns is written under the ordinary rules, so a
+method cannot smuggle a handle out by wrapping it in a list. A longer
+worked example, on a class that owns an open connection, is in
+<code>vignette(&quot;handles&quot;, package = &quot;typedjson&quot;)</code>.</p>
+</div>
+<div id="the-gap-this-fills" class="section level2">
+<h2>The gap this fills</h2>
+<p>R has fast JSON, queryable JSON, and faithful-but-verbose JSON.
+Nothing was faithful <em>and</em> terse.</p>
+<p>The <code>jsonlite::toJSON()</code> / <code>fromJSON()</code> pair is
+readable and lossy. The <code>serializeJSON()</code> /
+<code>unserializeJSON()</code> pair is faithful and unreadable, at
+3.6–4.9× the size, and its default <code>digits = 8</code> silently
+corrupts doubles — measured, 3994 of 4005 sample values come back
+changed, and <code>digits = NA</code> is lossy too. Only
+<code>digits &gt;= 16</code> is exact. Everything published since
+jsonlite 2.0.0 is a speed play (yyjsonr, RcppSimdJson, jsonify,
+rapidjsonr) or a query layer (rjsoncons); none is a fidelity play.</p>
+<p>The losses in the readable pair are not exotic. Measured against a
+37-value corpus of ordinary R values, that pair round-trips 14. Doubles
+come back as integers, all-<code>NA</code> vectors lose their type,
+names are dropped, <code>character()</code> and <code>integer()</code>
+both become <code>list()</code>, and <code>Date</code>, factor and
+<code>POSIXct</code> arrive as bare strings or numbers.</p>
+<p>The reason this is worth a package rather than a workaround is that
+the losses only bite where no schema exists. Walking a serialized blockr
+board, 0 of 77 leaves fail the round trip, because every value is
+rebuilt through a constructor that re-imposes its type. Persisted
+extension state has no constructor, so it takes the untagged path and
+arrives changed.</p>
+</div>
+<div id="engine" class="section level2">
+<h2>Engine</h2>
+<p>Vendor yyjson, write the glue with cpp11.</p>
+<table style="width:100%;">
+<colgroup>
+<col width="16%" />
+<col width="16%" />
+<col width="16%" />
+<col width="16%" />
+<col width="16%" />
+<col width="16%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>lang</th>
+<th>license</th>
+<th>maintained</th>
+<th>int vs real on parse</th>
+<th>shortest-RT doubles</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>yyjson</strong></td>
+<td>C</td>
+<td>MIT</td>
+<td>2026-08-26, v0.12.0</td>
+<td>native <code>UINT</code> / <code>SINT</code> /
+<code>REAL</code></td>
+<td>yes</td>
+</tr>
+<tr class="even">
+<td>simdjson</td>
+<td>C++17</td>
+<td>Apache-2.0</td>
+<td>very active, v4.6.9</td>
+<td>yes</td>
+<td>parser-first; its R binding exports no writer</td>
+</tr>
+<tr class="odd">
+<td>RapidJSON</td>
+<td>C++</td>
+<td>MIT (mixed)</td>
+<td>last release 2016</td>
+<td>yes</td>
+<td>Grisu2, exact but not always shortest</td>
+</tr>
+<tr class="even">
+<td>jsoncons</td>
+<td>C++11</td>
+<td>Boost</td>
+<td>active, v1.9.0</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr class="odd">
+<td>cJSON</td>
+<td>C</td>
+<td>MIT</td>
+<td>active</td>
+<td>no — every number is a <code>double</code></td>
+<td>no</td>
+</tr>
+<tr class="even">
+<td>jsmn</td>
+<td>C</td>
+<td>MIT</td>
+<td>2024</td>
+<td>tokenizer only</td>
+<td>you write it</td>
+</tr>
+</tbody>
+</table>
+<p>The decisive column is the last one. Shortest-round-trip double
+formatting is the hard part, and getting it wrong reintroduces exactly
+the <code>serializeJSON</code> digits trap; writing Ryu or Grisu
+ourselves is not a reasonable undertaking. Vendoring is
+<code>yyjson.c</code> at 413 KB and <code>yyjson.h</code> at 323 KB,
+which is what yyjsonr already does.</p>
+<p>Two findings make yyjson fit better than its feature list suggests.
+Its builder takes a contiguous typed C array plus a length —
+<code>yyjson_mut_arr_with_real(doc, vals, n)</code> and friends — and
+R’s vectors <em>are</em> contiguous typed arrays, so writing one is a
+single call with no per-element loop. And although it is DOM-only with
+no SAX API, that is an advantage here rather than a limitation:
+<code>yyjson_arr_size()</code> gives the length before allocation, so it
+is <code>allocVector(REALSXP, n)</code> once and fill, where a callback
+parser would not know the length until the array closed and would force
+grow-and-copy.</p>
+<p>The headroom that justified the choice was measured before this
+package existed, with yyjsonr standing in for the codec that had not
+been written yet, on a 172 KB payload:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>write</th>
+<th>read</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>yyjsonr (C)</td>
+<td>0.004 s</td>
+<td>0.004 s</td>
+</tr>
+<tr class="even">
+<td><code>jsonlite::toJSON()</code> / <code>fromJSON()</code></td>
+<td>1.08 s</td>
+<td>0.19 s</td>
+</tr>
+<tr class="odd">
+<td><code>jsonlite::serializeJSON()</code> /
+<code>unserializeJSON()</code></td>
+<td>3.46 s</td>
+<td>1.11 s</td>
+</tr>
+</tbody>
+</table>
+<p>The reason for a gap that size is that <code>serializeJSON()</code>
+is implemented in R — its <code>pack()</code> is a recursive R-level
+walk before anything reaches C — so a C codec fixes the speed and the
+verbosity in one move. What this package itself measures, on a payload
+of its own and against the same two pairs, is in
+<code>vignette(&quot;benchmarks&quot;, package = &quot;typedjson&quot;)</code>.</p>
+<p>The cpp11 package unlocks nothing from any of these libraries; the
+customization points the C++ ones offer (<code>json_type_traits</code>,
+<code>adl_serializer</code>) map static C++ types, and <code>SEXP</code>
+is one dynamically-typed handle with nothing static to map. What it buys
+is safety in our own code: yyjson allocates its own document, and an R
+error longjmping mid-parse would leak it without unwind protection.</p>
+</div>
+<div id="testing" class="section level2">
+<h2>Testing</h2>
+<p>One property over a corpus, and this is what decides whether the
+package is trustworthy.</p>
+<p>The corpus is every atomic type crossed with {empty, scalar, vector},
+{no attributes, names, class} and {no NA, some NA, all NA}, plus the
+non-finites, the numeric extremes, the tag lookalikes, nesting, the
+language types, each object system, one entry per environment rung, a
+closure over each of those rungs and over a local frame, the primitives,
+and a random-value fuzzer. Where a value meets only the weaker contract
+the relation itself is the expectation, so equivalence is checked by one
+walk rather than spelled out at each call site. Every entry is checked
+in each position it can occupy, since a value written bare at the
+document root and the same value written as an array element take
+different paths. Real payloads on top: a board produced by
+<code>blockr.core::blockr_ser()</code>, a recorded set of LLM
+conversation turns, and a link input of <code>&quot;Inf&quot;</code> as a named
+regression.</p>
+</div>
+<div id="prior-art" class="section level2">
+<h2>Prior art</h2>
+<p>Borrowed: the escaped prefix token from Transit, and the
+identity-plus-state model from Python’s pickle, which records a class
+and its <code>__dict__</code> and reconstructs by lookup rather than
+serializing behavior.</p>
+<p>Considered and not taken: the sidecar of superjson, which keys type
+metadata by path at the document root, is elegant and keeps the payload
+untouched, but its dot paths break on keys containing dots and our
+payloads are full of them. MongoDB Extended JSON ships canonical and
+relaxed modes; we avoid needing two by annotating only what cannot be
+expressed plainly.</p>
+<p>Closest analogue is <code>TypedJSON.jl</code>, which states the same
+three goals — type fidelity, human readability, long-term archival — and
+uses a type identifier plus data with fully-qualified names for
+user-defined types. Two divergences, both deliberate. It tags non-finite
+scalars as objects where we use escaped strings, which costs an object
+per value and is the wrong trade when terseness is half the point. And
+it converts functions, IO handles and pointers to <code>null</code> “to
+avoid raising errors”, which is the silent corruption this package
+exists to prevent; we error, or the class uses the extension
+protocol.</p>
+</div>
+<div id="deferred" class="section level2">
+<h2>Deferred</h2>
+<p>Determinism of key order, which is a separate and worthwhile
+guarantee for diffing and hashing, and which the JSON world already
+calls “stable”. A binary sibling via CBOR or MessagePack, which would
+have argued for jsoncons over yyjson and can be revisited if it ever
+earns its place. Streaming, in both directions: writing a file hands the
+document to a <code>FILE*</code> rather than through an R string, but
+the whole document is still built twice over — once as the DOM, once as
+one contiguous buffer — before a byte reaches disk, and reading pulls
+the whole file into memory before parsing it. Emitting as the walk
+proceeds would mean replacing yyjson’s builder, which is what buys the
+single-call typed-array write over R’s contiguous vectors and the
+shortest round-trip double formatting, and yyjson offers no SAX reader
+to match it on the way back. A way to turn the S4 and S7 validity check
+off, which is a cost question rather than a correctness one. Running
+<code>methods::validObject()</code> or <code>S7::validate()</code> costs
+about 100 µs an object, paid even where the class declares no validator,
+since both still check slot and property types; the knee is around a
+thousand objects of one class in one document, which is well past what a
+format meant to stay diffable, greppable and editable by hand is aimed
+at. Construction is the ceiling — <code>methods::new()</code> on the
+same class costs 155 µs — so a read that validates still comes in under
+building the same objects through the class. What the argument would ask
+for also reads awkwardly once named honestly, an object the class says
+is invalid being the thing the <code>R6</code> refusal above already
+declines to hand out on the class’s behalf, and adding it later costs
+little, the gate being a single call site a flag would skip before it
+reaches R.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
