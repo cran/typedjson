@@ -1,3 +1,7 @@
+# typedjson 0.1.1
+
+* Installs cleanly with GCC 16 under link-time optimization, where 0.1.0 drew a spurious `-Wstringop-overflow` warning (#86).
+
 # typedjson 0.1.0
 
 First release, carrying the format and the two round-trip contracts described in `vignette("design")`.

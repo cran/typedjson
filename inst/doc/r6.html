@@ -468,7 +468,7 @@ ran.</p>
 <span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt;       &quot;R6&quot;</span></span>
 <span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt;     ],</span></span>
 <span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co">#&gt;     &quot;state&quot;: {</span></span>
-<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co">#&gt;       &quot;root&quot;: &quot;/tmp/RtmpzaFTPM/store&quot;,</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co">#&gt;       &quot;root&quot;: &quot;/tmp/Rtmpv5wwa5/store&quot;,</span></span>
 <span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="co">#&gt;       &quot;format&quot;: &quot;rds&quot;</span></span>
 <span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="co">#&gt;     }</span></span>
 <span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="co">#&gt;   }</span></span>
@@ -611,7 +611,7 @@ kind, so the environment rule applies to it and its contents are written
 <span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a><span class="fu">class</span>(vault) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;MyVault&quot;</span>, <span class="st">&quot;environment&quot;</span>)</span>
 <span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a></span>
 <span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="fu">json_write_str</span>(vault)</span>
-<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~a\&quot;:{\&quot;class\&quot;:[\&quot;MyVault\&quot;,\&quot;environment\&quot;]},\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;}},\&quot;bindings\&quot;:{\&quot;key\&quot;:\&quot;s3cret\&quot;,\&quot;root\&quot;:\&quot;/tmp/RtmpzaFTPM\&quot;</span><span class="re">}}}</span><span class="co">&quot;</span></span></code></pre></div>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~a\&quot;:{\&quot;class\&quot;:[\&quot;MyVault\&quot;,\&quot;environment\&quot;]},\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;}},\&quot;bindings\&quot;:{\&quot;key\&quot;:\&quot;s3cret\&quot;,\&quot;root\&quot;:\&quot;/tmp/Rtmpv5wwa5\&quot;</span><span class="re">}}}</span><span class="co">&quot;</span></span></code></pre></div>
 <p>That is the environment rule holding rather than a hole in it. An
 environment is its contents, which is what base R’s
 <code>serialize()</code> records as well and what

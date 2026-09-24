@@ -1,6 +1,6 @@
 Package: typedjson
 Title: Type-Faithful and Human-Readable JSON for R Values
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
     person("Nicolas", "Bennett", , "nicolas@cynkra.com",
            role = c("aut", "cre", "cph")),
@@ -31,9 +31,9 @@ Config/testthat/edition: 3
 URL: https://nbenn.github.io/typedjson/
 BugReports: https://github.com/nbenn/typedjson/issues
 NeedsCompilation: yes
-Packaged: 2026-09-10 11:13:06 UTC; coder
+Packaged: 2026-09-24 11:09:45 UTC; coder
 Author: Nicolas Bennett [aut, cre, cph],
   YaoYuan [ctb, cph] (Author of the vendored yyjson library)
 Maintainer: Nicolas Bennett <nicolas@cynkra.com>
 Repository: CRAN
-Date/Publication: 2026-09-18 11:20:02 UTC
+Date/Publication: 2026-09-24 12:10:02 UTC

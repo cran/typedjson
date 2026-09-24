@@ -435,7 +435,7 @@ and how far into the file it has got.</p>
 <span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="co">#&gt;   &quot;~x&quot;: {</span></span>
 <span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co">#&gt;     &quot;class&quot;: &quot;chunk_reader&quot;,</span></span>
 <span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co">#&gt;     &quot;state&quot;: {</span></span>
-<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co">#&gt;       &quot;path&quot;: &quot;/tmp/RtmpzaFTPM/events.log&quot;,</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co">#&gt;       &quot;path&quot;: &quot;/tmp/Rtmpv5wwa5/events.log&quot;,</span></span>
 <span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="co">#&gt;       &quot;size&quot;: 2,</span></span>
 <span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="co">#&gt;       &quot;offset&quot;: 32.0</span></span>
 <span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="co">#&gt;     }</span></span>
@@ -491,7 +491,7 @@ your method’s decision rather than the format’s. The method above opens
 eagerly, so it reports the problem as soon as the document is read.</p>
 <div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">json_read_str</span>(<span class="fu">sub</span>(<span class="fu">basename</span>(path), <span class="st">&quot;no-such-file&quot;</span>, doc, <span class="at">fixed =</span> <span class="cn">TRUE</span>))</span>
 <span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="co">#&gt; Warning in file(state$path, open = &quot;r&quot;): cannot open file</span></span>
-<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="co">#&gt; &#39;/tmp/RtmpzaFTPM/no-such-file&#39;: No such file or directory</span></span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="co">#&gt; &#39;/tmp/Rtmpv5wwa5/no-such-file&#39;: No such file or directory</span></span>
 <span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a><span class="co">#&gt; Error in `file()`:</span></span>
 <span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="co">#&gt; ! cannot open the connection</span></span></code></pre></div>
 <p>Opening lazily on the first <code>read_next()</code> call, or falling
@@ -564,7 +564,7 @@ that does the refusing.</p>
 <span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a></span>
 <span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="fu">json_write_str</span>(reader)</span>
 <span id="cb14-15"><a href="#cb14-15" tabindex="-1"></a><span class="fu">cat</span>(doc)</span>
-<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="co">#&gt; {&quot;~x&quot;:{&quot;class&quot;:[&quot;ChunkReader&quot;,&quot;R6&quot;],&quot;state&quot;:{&quot;path&quot;:&quot;/tmp/RtmpzaFTPM/events.log&quot;,&quot;size&quot;:2,&quot;offset&quot;:16.0</span><span class="re">}}}</span></span>
+<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="co">#&gt; {&quot;~x&quot;:{&quot;class&quot;:[&quot;ChunkReader&quot;,&quot;R6&quot;],&quot;state&quot;:{&quot;path&quot;:&quot;/tmp/Rtmpv5wwa5/events.log&quot;,&quot;size&quot;:2,&quot;offset&quot;:16.0</span><span class="re">}}}</span></span>
 <span id="cb14-17"><a href="#cb14-17" tabindex="-1"></a></span>
 <span id="cb14-18"><a href="#cb14-18" tabindex="-1"></a>revived <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(doc)</span>
 <span id="cb14-19"><a href="#cb14-19" tabindex="-1"></a>revived<span class="sc">$</span><span class="fu">read_next</span>()</span>
