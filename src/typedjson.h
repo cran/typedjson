@@ -110,19 +110,36 @@ const char *const kTagExt = "~x";
 const char *const kTagId = "~id";
 const char *const kTagRef = "~ref";
 
-// A state recorded by name revives to the object it was written from, so the
-// writer's reference bookkeeping has nothing to track under this tag.
-inline bool records_by_name(const char *tag) {
-  return std::strcmp(tag, kTagR6Class) == 0;
-}
-
 const char *const kPartRe = "re";
 const char *const kPartIm = "im";
 
 const char *const kEnvParent = "parent";
 const char *const kEnvBindings = "bindings";
+const char *const kEnvActiveBindings = "active_bindings";
 const char *const kEnvLocked = "locked";
 const char *const kEnvLockedBindings = "locked_bindings";
+
+inline bool has_key(SEXP x, const char *key) {
+  SEXP nms = Rf_getAttrib(x, R_NamesSymbol);
+  if (TYPEOF(nms) != STRSXP) return false;
+
+  for (R_xlen_t i = 0; i < XLENGTH(nms); ++i) {
+    if (std::strcmp(CHAR(STRING_ELT(nms, i)), key) == 0) return true;
+  }
+  return false;
+}
+
+// A state recorded by name revives to the object it was written from, so the
+// writer's reference bookkeeping has nothing to track under it. An `R6` class
+// recorded by what it binds, the way an environment is, rebuilds a new
+// generator instead, and is a reference like any other.
+inline bool records_by_name(const char *tag, SEXP state) {
+  if (std::strcmp(tag, kTagS7) == 0) {
+    return TYPEOF(state) == STRSXP ||
+           (has_key(state, "package") && !has_key(state, "constructor"));
+  }
+  return std::strcmp(tag, kTagR6Class) == 0 && !has_key(state, kEnvBindings);
+}
 
 // R 4.5 added R_ParentEnv() and R 4.6 withdrew ENCLOS(), so which accessor
 // reads an environment's parent depends on which side of that change we are on.
@@ -138,13 +155,15 @@ enum BindKind { BIND_VALUE = 0, BIND_ACTIVE, BIND_PROMISE };
 
 // R 4.6 reports the kind of a binding directly and moved findVarInFrame()
 // behind the legacy switch, so the two releases ask the same question through
-// different calls. Neither forces: an active binding is read through its own
-// predicate and a promise is refused rather than evaluated, which is why the
-// delayed and forced cases need no telling apart.
+// different calls. Neither forces: an active binding hands back the function
+// it runs rather than what calling that returns, and a promise is refused
+// rather than evaluated, which is why the delayed and forced cases need no
+// telling apart.
 #if defined(R_VERSION) && R_VERSION >= R_Version(4, 6, 0)
 inline BindKind binding_of(SEXP sym, SEXP env, SEXP *value) {
   switch (R_GetBindingType(sym, env)) {
     case R_BindingTypeActive:
+      *value = R_ActiveBindingFunction(sym, env);
       return BIND_ACTIVE;
     case R_BindingTypeDelayed:
     case R_BindingTypeForced:
@@ -160,7 +179,10 @@ inline BindKind binding_of(SEXP sym, SEXP env, SEXP *value) {
 }
 #else
 inline BindKind binding_of(SEXP sym, SEXP env, SEXP *value) {
-  if (R_BindingIsActive(sym, env)) return BIND_ACTIVE;
+  if (R_BindingIsActive(sym, env)) {
+    *value = R_ActiveBindingFunction(sym, env);
+    return BIND_ACTIVE;
+  }
   SEXP found = Rf_findVarInFrame(env, sym);
   if (TYPEOF(found) == PROMSXP) return BIND_PROMISE;
   *value = found;
@@ -252,6 +274,87 @@ inline SEXP attrib_value(const std::vector<Attrib> &attrs, SEXP tag) {
   return R_NilValue;
 }
 
+// A refusal names the path it stopped at, spelled the way R reaches that
+// position from the root: a list element by name where it has one and by
+// index where it does not, and an attribute through `attr()`, since `$` would
+// read the same as an element of that name. Each level of a walk pushes the
+// position it enters and pops it again by scope, so the writer and the reader
+// spell a position the same way. A walk that refuses nothing it could name
+// has no trail to keep, and steps without one.
+enum CrumbKind { CRUMB_ELEMENT = 0, CRUMB_ATTRIBUTE };
+
+struct Crumb {
+  SEXP name;
+  R_xlen_t index;
+  CrumbKind kind;
+};
+
+// The name of an attribute sits in a string literal, which a quote or a
+// backslash in the name would otherwise end or escape.
+inline std::string literal(const char *s) {
+  std::string out(1, '"');
+  for (; *s != '\0'; ++s) {
+    if (*s == '"' || *s == '\\') out.push_back('\\');
+    out.push_back(*s);
+  }
+  out.push_back('"');
+  return out;
+}
+
+class Trail {
+ public:
+  std::string path() const {
+    std::string out("x");
+    for (size_t i = 0; i < crumbs_.size(); ++i) {
+      const Crumb &crumb = crumbs_[i];
+      if (crumb.kind == CRUMB_ATTRIBUTE) {
+        out = "attr(" + out + ", " + literal(CHAR(crumb.name)) + ")";
+      } else if (crumb.name != R_NilValue && crumb.name != NA_STRING &&
+                 CHAR(crumb.name)[0] != '\0') {
+        out += "$";
+        out += CHAR(crumb.name);
+      } else {
+        out += "[[" + std::to_string(crumb.index + 1) + "]]";
+      }
+    }
+    return out;
+  }
+
+  std::string at(const std::string &msg) const {
+    return msg + " at `" + path() + "`";
+  }
+
+  [[noreturn]] void fail(const std::string &msg) const {
+    std::string full = at(msg);
+    cpp11::stop("%s", full.c_str());
+  }
+
+ private:
+  std::vector<Crumb> crumbs_;
+
+  friend class Step;
+};
+
+class Step {
+ public:
+  Step(Trail *trail, SEXP name, R_xlen_t index,
+       CrumbKind kind = CRUMB_ELEMENT)
+      : trail_(trail) {
+    if (trail_ == nullptr) return;
+    Crumb crumb = {name, index, kind};
+    trail_->crumbs_.push_back(crumb);
+  }
+  ~Step() {
+    if (trail_ != nullptr) trail_->crumbs_.pop_back();
+  }
+
+  Step(const Step &) = delete;
+  Step &operator=(const Step &) = delete;
+
+ private:
+  Trail *trail_;
+};
+
 // A hook is reached through `cpp11::function`, which splices the argument into
 // a call and evaluates it. Nearly every value that crosses the boundary is one
 // R hands back as-is, but a call is run, so a document could execute what it
@@ -275,9 +378,10 @@ inline SEXP quoted(SEXP x) {
   return Rf_lang2(quote, x);
 }
 
-// A yyjson document outlives every C++ frame that could clean it up, since
-// an R error raised anywhere in the walk longjmps past destructors. Handing
-// ownership to an external pointer lets R reclaim it through the finalizer.
+// A yyjson document outlives every C++ frame that could clean it up, as does
+// the reader walking one, since an R error raised anywhere in the walk
+// longjmps past destructors. Handing ownership to an external pointer lets R
+// reclaim either through the finalizer.
 inline SEXP guard(void *ptr, R_CFinalizer_t finalizer) {
   SEXP out = PROTECT(R_MakeExternalPtr(ptr, R_NilValue, R_NilValue));
   R_RegisterCFinalizerEx(out, finalizer, TRUE);

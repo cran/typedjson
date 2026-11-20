@@ -117,6 +117,34 @@ try({
 json_write_str((function() R6::R6Class("Local", public = list(v = 1)))())
 })
 
+## -----------------------------------------------------------------------------
+Local <- (function() R6::R6Class("Local", public = list(v = 1)))()
+
+back <- json_read_str(json_write_str(Local, self_contained = TRUE))
+
+back$new()$v
+
+## -----------------------------------------------------------------------------
+Account <- R6::R6Class("Account",
+  public = list(
+    deposit = function(x) {
+      private$balance <- private$balance + x
+      invisible(self)
+    },
+    total = function() private$balance
+  ),
+  private = list(balance = 0)
+)
+
+account <- Account$new()$deposit(10)
+
+back <- json_read_str(json_write_str(account, self_contained = TRUE))
+
+back$deposit(5)$total()
+
+## -----------------------------------------------------------------------------
+grepl("s3cret", json_write_str(store, self_contained = TRUE), fixed = TRUE)
+
 ## ----error = TRUE-------------------------------------------------------------
 try({
 Cache <- setRefClass("Cache",

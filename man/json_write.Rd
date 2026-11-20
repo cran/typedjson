@@ -7,16 +7,21 @@
 \alias{json_write_str}
 \title{Write and read R values as JSON}
 \usage{
-json_read(path)
+json_read(path, code = TRUE)
 
-json_read_str(txt)
+json_read_str(txt, code = TRUE)
 
-json_write(x, path, pretty = TRUE, typed = TRUE)
+json_write(x, path, pretty = TRUE, typed = TRUE, self_contained = FALSE)
 
-json_write_str(x, pretty = FALSE, typed = TRUE)
+json_write_str(x, pretty = FALSE, typed = TRUE, self_contained = FALSE)
 }
 \arguments{
 \item{path}{Path to write to or read from.}
+
+\item{code}{Whether to rebuild what a document records of code. The
+default reads every value the format can record; \code{FALSE} reads a document
+as data alone, for one from somewhere it cannot be trusted, and refuses
+the rest where it sits with an error of class \code{typedjson_code_refusal}.}
 
 \item{txt}{Document to read, as a length-one character vector.}
 
@@ -29,6 +34,14 @@ compact.}
 \item{typed}{Whether to record what JSON cannot express. The default
 writes the annotated form this package reads back unchanged; \code{FALSE}
 writes plain JSON for a consumer that brings its own schema.}
+
+\item{self_contained}{Whether to carry a class definition the document
+would otherwise record by name. The default records the name wherever one
+finds the class again, which is what a wire format wants; \code{TRUE} carries
+the definition instead, which is what an archive wants. An S7 class and
+an \code{R6} class generator are reached, no \code{\link[=json_state]{json_state()}} method a class
+author wrote is asked, and an \code{R6} instance is written whole, with
+\code{vignette("design")} setting out which names are left alone and why.}
 }
 \value{
 The \code{json_write()} function returns \code{path} invisibly and
@@ -51,16 +64,20 @@ json_write_str(json_read_str(doc)) == doc
 The first holds for every supported value: every atomic type, missing
 values of each type, the non-finite doubles, attributes of any shape,
 language objects, closures, and objects built with S3, S4 or S7.
-Three values need it stated differently. An environment recorded by its
+Four values need it stated differently. An environment recorded by its
 contents comes back a new environment, which is the exception base R's
 own \code{serialize()} makes as well: what comes back binds the same names
 to the same values, locked the same way, under a parent that is itself
 equivalent, and a closure over one is equivalent for that same reason.
 An S7 class a document carries the definition of is equivalent for that
 same reason wherever a part of it closes over such an environment, which
-S7 builds for the constructor of every class that has a parent. A string
-R has not declared an encoding for comes back declared UTF-8, so the
-property holds on its bytes rather than under \code{identical()}.
+S7 builds for the constructor of every class that has a parent. An \code{R6}
+class a document carries the definition of is such an environment
+itself, and holds its parent where the class it was written from held
+the expression finding one. An \code{R6} instance the \code{self_contained} flag
+writes whole is such an environment as well. A string R has not declared
+an encoding for comes back declared UTF-8, so the property holds on its
+bytes rather than under \code{identical()}.
 The second holds for every document this package can write. Foreign
 documents are read under the same grammar and normalize on the first
 round trip, since a mixed-type array such as \verb{[1, "a"]} has to come
@@ -152,7 +169,10 @@ and the imports environment of a namespace. Those
 come back as the object they were written from. Anything else is
 recorded by its contents, with the parent following the same rule and
 the locked bit and locked bindings recorded alongside, and comes back
-equivalent. A recorded name that is not available on the way back is
+equivalent. An active binding among those contents is recorded by the
+function it runs rather than by what that returns, and comes back active:
+the function is called on neither side, which is how \code{serialize()}
+records one too. A recorded name that is not available on the way back is
 replaced by the global environment with a warning, the way base R
 already does.
 
@@ -168,7 +188,12 @@ frame binds it back comes back bound that way. What stays refused,
 naming both ends of it, is a cycle closing through an object the
 extension protocol builds in one call, an opted-in \code{R6} instance among
 them, since a constructor cannot be handed an object that already
-exists.
+exists. So is one through an \code{R6} class a document carries the
+definition of, which is rebuilt in one call the same way. An \code{R6}
+instance the \code{self_contained} flag writes whole is an environment rather
+than such an object, so a cycle through one comes back, as does one
+through any environment whose class has a method its author wrote, since
+the flag asks none.
 
 A language object is a value rather than a handle, so it round-trips
 exactly and nothing about it is deparsed. A call, an expression and a
@@ -186,7 +211,10 @@ is recorded by the name that finds it again, which is what base R does
 with one. No source reference is recorded: the \code{srcref} a parser
 attaches to a function definition, to a \verb{\{} block and to what \code{parse()}
 returns is dropped, which keeps a document diffable and leaves the
-value equal under \code{identical()}, whose default ignores one. A
+value equal under \code{identical()}, whose default ignores one. The one
+place it does not is a definition inside a body, whose source reference
+the parser keeps as the last element of the \code{function} call, so that
+element comes back as the \code{NULL} a parse keeping no source puts there. A
 byte-compiled closure is written from \code{body()}, which is the source
 tree it was compiled from.
 
@@ -194,12 +222,10 @@ Values that are handles rather than data stay out: an external pointer
 is refused rather than silently written as something else, and an
 environment binding holding one is refused with it. So is a binding
 holding a promise, since forcing it on the writer's own initiative
-could run arbitrary code, and an active binding, since reading it would
-do the same and record the result as though it were a plain value. That
-reaches a closure through the frame it closes over, where an argument
-the function was called with stays a promise whether or not it has been
-forced. A class that owns such a handle can still be persisted by
-writing a \code{\link[=json_state]{json_state()}} method for it.
+could run arbitrary code. That reaches a closure through the frame it
+closes over, where an argument the function was called with stays a
+promise whether or not it has been forced. A class that owns such a
+handle can still be persisted by writing a \code{\link[=json_state]{json_state()}} method for it.
 
 Slots and properties are attributes, so an S4 or S7 object is rebuilt
 by the attribute rule rather than by whatever the class constructs one
@@ -225,11 +251,62 @@ in a session where no such class exists. Every class those parts name is
 recorded by what identifies it rather than walked into — one S7 itself
 binds by the name it holds there, an S3 class by its class vector, a
 union by its members, and a class of your own by the two forms above —
-since every refusal a walk into one hits is inside S7's own machinery
-rather than in the class you wrote. The class vector an object records
-is checked against the class it resolves to, so a document where the two
-disagree is refused rather than dispatching on the one and taking its
-properties from the other.
+since a walk into one lands in S7's own machinery rather than in the class
+you wrote. The class vector an object records is checked against the class
+it resolves to, so a document where the two disagree is refused rather
+than dispatching on the one and taking its properties from the other.
+The objects of one document that share a class come back sharing it, a
+class the reader rebuilds from its definition included.
+From S7 1.0.0 an object holds its class behind a class reference, which is
+recorded by the class it holds.
+A document holding a class reference needs S7 1.0.0 to be read.
+
+Which of the two a class gets is a default rather than a rule, and it is
+the \code{self_contained} flag that overrides it. A document written with that
+flag set carries the definition of every S7 class in it, package-scoped or
+not, because a reference resolves against the reader's session rather than
+the writer's: the package may not be installed where the document is read,
+may have been renamed since, or may have drifted in a way that still
+validates. That is the answer an archive wants where a wire format wants
+the reference. The definition carries the package the class was scoped by,
+so the qualified class vector an instance records still names the class
+the document rebuilds. That vector is also what S7 dispatches on, so
+methods still come from the session reading the document, and a method
+written for a newer version of the class can meet an object in the shape
+the document archived.
+
+What the flag does not reach is the rest of what this format records by
+name, and the reason differs across that set rather than falling out of
+one rule. A primitive and a class the S7 package itself binds have no
+definition to carry, a walk into either landing in machinery rather than
+in anything an author wrote, so there the name is the only representation
+available. A namespace, a package environment and the imports environment
+of one could be carried and should not be, since what that records is a
+frozen copy of an installed package where a reader wants the package that
+is installed. The global environment is the same answer for the opposite
+reason, being where a reference is most fragile and where recording by
+contents is least plausible alike: one closure over it would put a whole
+workspace into the document. The class name an S4 object records keeps its
+reference as well, since an S4 definition is an entry in a registry the
+whole session shares rather than a value, and carrying one would mean
+registering it where the document is read. Plain mode records no class at
+all, so it and the flag cannot both be asked for, and the second contract
+holds within a mode rather than across the pair, a document carrying a
+definition writing back to itself where it is written the same way.
+
+The flag asks no \code{\link[=json_state]{json_state()}} method a class author wrote, whatever the
+class. The record one writes is read back through the class's own
+\code{\link[=json_revive]{json_revive()}} method, found by name, which is the lookup the flag exists
+to avoid, so the model is base R's \code{serialize()}, which asks a class nothing
+and writes an object by its type and attributes. A value whose class has
+such a method is written by the rule for its type, as though the class had
+none: a field the method would leave out is written, a credential included,
+and a handle it would stand in for stops the write where it sits, since no
+document can carry one. The package's own methods are its handling of a
+class rather than an author's code, so they still run, the refusal of an
+\code{R6} instance aside, which the flag answers by writing one whole, as below.
+That is what carries an S7 class and an \code{R6} generator, and what keeps a
+reference class instance refused whatever methods its class has.
 
 An \code{R6} instance is refused as well, for a reason one level up. What an
 \code{R6} class guarantees is what its methods say rather than what its
@@ -241,6 +318,50 @@ recording them. An \code{R6} class generator needs no method either way: it
 is recorded by the class it names, and comes back the object it was
 written from.
 
+Where the \code{self_contained} flag asks for it, a generator is recorded by
+what it binds instead, the way an environment is recorded by its
+contents, apart from what is R6's own rather than the class's: \code{self} and
+the functions R6 installs in every generator, its own \code{clone} among the
+methods included, which is whatever refers back to the generator. On the
+way back \code{R6::R6Class()} makes an empty generator, which supplies that
+part again, and the recorded bindings and attributes are put back into
+it. A document holding one therefore needs R6 where it is read but not
+the package that defined the class, a class no name finds again is
+carried rather than refused, and whatever the class binds comes back as
+it was. The parent is carried by the same rule rather than as the
+expression finding it, so a chain comes back whole, and the rebuilt class
+no longer follows a parent redefined after it was written. Unlike an S7
+definition this one carries the methods, which an \code{R6} class holds rather
+than registering them on a generic, so a class fixed or upgraded since
+the document was written does not reach the one it rebuilds. The
+environment those methods close over is recorded by the environment rule,
+so a namespace the reader cannot find is replaced by the global
+environment with a warning, and a method calling into a package that is
+gone fails where it is called. What comes back is a new generator rather
+than the one the name finds, so writing it again without the flag is
+refused.
+
+The flag reaches an \code{R6} instance as well, and answers the refusal rather
+than overriding it. What made recording an instance an assertion about
+its class was picking which of its bindings are the state, and an
+instance written whole picks nothing: the environment rule records it
+like any other environment, so its fields, active ones too, its private
+bindings, its methods and the environment those close over all travel. No
+\code{\link[=json_state]{json_state()}} method is asked, as for any class above, an opt-in through
+\code{\link[=r6_state]{r6_state()}} included, so a field a method would leave out is written and
+a handle a method would stand in for stops the write, as it does in any
+environment. What comes back is that environment wearing the class
+attribute, built without the generator, so a document holding one reads
+where neither the class nor R6 is available. Nothing checks it on the way
+back either. It is built without running its \code{initialize} or registering a
+\code{finalize} method, and its methods are the ones the class had where the
+document was written, so a class fixed or upgraded since does not reach the
+object. Most of what an instance of a cloneable class writes is R6's own
+\code{clone} method, a copy of which R6 puts into the instance and into each
+level of the chain it inherits. Writing what comes back without the flag
+asks its class for a method as for any instance, and is refused where the
+class has none.
+
 A reference class instance is refused on the second half of that reason
 alone. Fields are declared there, so what the representation is already
 has an answer, but the object is still a reference whose \code{initialize}
@@ -249,9 +370,32 @@ binding would, so a method of your own is what settles it here as well,
 on the concrete class or on any class between that and \code{envRefClass},
 which is where the refusal sits. The generator that makes one is refused
 rather than recorded, since a walk into it reaches the internals of the
-\code{methods} package rather than the class. An environment you have classed
-yourself claims none of this, and is written by the environment rule
-above, contents and all.
+\code{methods} package rather than the class. The same walk keeps an instance
+refused under the \code{self_contained} flag, the instance binding its class
+definition, and a method of your own does not settle it there, the flag
+asking none. An environment you have classed yourself claims none of this,
+and is written by the environment rule above, contents and all.
+
+A document that arrives from somewhere it cannot be trusted can be read
+as data alone, which is what the \code{code} flag of both readers is for. By
+default a reader rebuilds whatever a document records, and some of that is
+code: a call comes back a call, which runs wherever it is evaluated, and a
+closure runs wherever it is called. More of it reaches code the session
+already holds, picked by what the document names: an environment recorded
+by name can load the package it names, a \code{~x} tag is rebuilt by a
+\code{\link[=json_revive]{json_revive()}} method and an \code{R6} or S7 class by its generator, and an S4
+or S7 object is handed to the check its class supplies. With \code{code = FALSE}
+the reader neither rebuilds code nor calls into R to build or check a
+value, and every value that would take either is refused where it sits,
+naming the path: a symbol, a call, a pairlist and an expression, a closure
+and a primitive, an environment, the \code{~r6class}, \code{~s7} and \code{~x} tags, and a
+value carrying the S4 bit or an \verb{_S7_class} or \code{S7_class} attribute. A
+refusal is an error of class \code{typedjson_code_refusal}, so a caller can tell
+a document refused for what it records from one that is not JSON at all.
+What is left is what describes data, which is the vector types, lists and
+\code{NULL}, attributes and the \code{~z} specials, so a factor, a date and a data
+frame still come back, and a document the flag does not refuse comes back
+as the default reads it.
 }
 \examples{
 json_write_str(list(n = 1L, x = 2.5, missing = NA_character_))
@@ -268,4 +412,23 @@ identical(json_read_str(json_write_str(x)), x)
 json_write_str(list(required = I("x"), additionalProperties = FALSE),
                typed = FALSE)
 
+# A document read as data alone refuses what it records of code.
+doc <- json_write_str(list(when = as.Date("2026-01-01"), by = quote(f(x))))
+try(json_read_str(doc, code = FALSE))
+
+\dontshow{if (requireNamespace("S7", quietly = TRUE)) withAutoprint(\{ # examplesIf}
+# The constructor of a class defined in a package closes over that
+# namespace, which a name finds again; `local()` stands in for it here.
+Archived <- local(
+  S7::new_class(
+    "Archived", properties = list(n = S7::class_double),
+    package = "somepkg"
+  ),
+  globalenv()
+)
+
+json_write_str(Archived(n = 1))
+
+json_write_str(Archived(n = 1), self_contained = TRUE)
+\dontshow{\}) # examplesIf}
 }

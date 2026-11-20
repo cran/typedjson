@@ -468,7 +468,7 @@ ran.</p>
 <span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt;       &quot;R6&quot;</span></span>
 <span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt;     ],</span></span>
 <span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co">#&gt;     &quot;state&quot;: {</span></span>
-<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co">#&gt;       &quot;root&quot;: &quot;/tmp/Rtmpv5wwa5/store&quot;,</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co">#&gt;       &quot;root&quot;: &quot;/tmp/tk-e61d43ad63941/RtmpWglkdF/store&quot;,</span></span>
 <span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="co">#&gt;       &quot;format&quot;: &quot;rds&quot;</span></span>
 <span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="co">#&gt;     }</span></span>
 <span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="co">#&gt;   }</span></span>
@@ -574,6 +574,71 @@ read.</p>
 <div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">json_write_str</span>((<span class="cf">function</span>() R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Local&quot;</span>, <span class="at">public =</span> <span class="fu">list</span>(<span class="at">v =</span> <span class="dv">1</span>)))())</span>
 <span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
 <span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="co">#&gt; ! the class was defined in an environment that cannot be found again at `x`</span></span></code></pre></div>
+<p>A document meant as an archive can carry the class instead, since a
+name that finds it where the document is written may find nothing where
+it is read. The <code>self_contained</code> flag records what the
+generator binds, apart from the machinery every generator shares, and on
+the way back puts that into an empty generator from
+<code>R6::R6Class()</code>. So the generator above is carried rather
+than refused, and comes back as an equivalent copy rather than as the
+same object.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>Local <span class="ot">&lt;-</span> (<span class="cf">function</span>() R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Local&quot;</span>, <span class="at">public =</span> <span class="fu">list</span>(<span class="at">v =</span> <span class="dv">1</span>)))()</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>back <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(<span class="fu">json_write_str</span>(Local, <span class="at">self_contained =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>back<span class="sc">$</span><span class="fu">new</span>()<span class="sc">$</span>v</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="co">#&gt; [1] 1</span></span></code></pre></div>
+<p>The methods travel with the definition, so a class fixed or upgraded
+since the document was written does not reach the one it rebuilds. The
+rest of what the flag carries, and what it leaves by name, is set out in
+<code>vignette(&quot;design&quot;)</code>.</p>
+</div>
+<div id="writing-an-instance-whole" class="section level2">
+<h2>Writing an instance whole</h2>
+<p>The same flag answers the refusal this page began with. What made
+writing an instance an assertion about its class was picking which of
+its bindings are the state, and an instance written whole picks nothing.
+It is written as the environment it is: fields, private bindings and
+methods, together with the environment the methods close over.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>Account <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Account&quot;</span>,</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="at">public =</span> <span class="fu">list</span>(</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>    <span class="at">deposit =</span> <span class="cf">function</span>(x) {</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>      private<span class="sc">$</span>balance <span class="ot">&lt;-</span> private<span class="sc">$</span>balance <span class="sc">+</span> x</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>      <span class="fu">invisible</span>(self)</span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>    },</span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>    <span class="at">total =</span> <span class="cf">function</span>() private<span class="sc">$</span>balance</span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a>  ),</span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a>  <span class="at">private =</span> <span class="fu">list</span>(<span class="at">balance =</span> <span class="dv">0</span>)</span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a>)</span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a></span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a>account <span class="ot">&lt;-</span> Account<span class="sc">$</span><span class="fu">new</span>()<span class="sc">$</span><span class="fu">deposit</span>(<span class="dv">10</span>)</span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a></span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a>back <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(<span class="fu">json_write_str</span>(account, <span class="at">self_contained =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb13-15"><a href="#cb13-15" tabindex="-1"></a></span>
+<span id="cb13-16"><a href="#cb13-16" tabindex="-1"></a>back<span class="sc">$</span><span class="fu">deposit</span>(<span class="dv">5</span>)<span class="sc">$</span><span class="fu">total</span>()</span>
+<span id="cb13-17"><a href="#cb13-17" tabindex="-1"></a><span class="co">#&gt; [1] 15</span></span></code></pre></div>
+<p>Nothing is looked up on the way back, so the document reads where
+neither the class nor R6 is installed. Nothing is checked either. The
+object is rebuilt without its class, so its <code>initialize</code> does
+not run, a <code>finalize</code> method is not registered, and its
+methods are the ones the class had where the document was written.</p>
+<p>The private balance travels with the rest, and so does everything
+else the object holds. The flag does not ask the class for a method,
+since the record a method writes is read back through the class’s own
+<code>json_revive()</code>, so the <code>store</code> from the first
+section, whose method leaves its key out, is written with its key.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">grepl</span>(<span class="st">&quot;s3cret&quot;</span>, <span class="fu">json_write_str</span>(store, <span class="at">self_contained =</span> <span class="cn">TRUE</span>), <span class="at">fixed =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<p>That is what a self-contained document is, and <code>saveRDS()</code>
+would write the key as well. A document that has to leave something out
+is one written without the flag, where the class’s method decides. An
+object holding a handle, such as an open connection, stops the write
+under the flag, since no document can carry one, and an opted-in class
+such as <code>Point</code> is written whole like any other. One limit
+remains: most of a document holding an instance of a cloneable class is
+R6’s own <code>clone</code> method, a copy of which R6 puts into every
+instance. The design notes in <code>vignette(&quot;design&quot;)</code> set out
+the rest.</p>
 </div>
 <div id="reference-classes-and-where-the-refusal-stops" class="section level2">
 <h2>Reference classes, and where the refusal stops</h2>
@@ -584,13 +649,13 @@ says what the representation is. The other half is unchanged: the object
 is a reference, <code>initialize</code> may establish an invariant that
 no assignment reproduces, and a field is as good a place to keep a
 credential as a private binding is.</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>Cache <span class="ot">&lt;-</span> <span class="fu">setRefClass</span>(<span class="st">&quot;Cache&quot;</span>,</span>
-<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="at">fields =</span> <span class="fu">list</span>(<span class="at">root =</span> <span class="st">&quot;character&quot;</span>, <span class="at">key =</span> <span class="st">&quot;character&quot;</span>)</span>
-<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>)</span>
-<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a></span>
-<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="fu">json_write_str</span>(Cache<span class="sc">$</span><span class="fu">new</span>(<span class="at">root =</span> <span class="fu">tempdir</span>(), <span class="at">key =</span> <span class="st">&quot;s3cret&quot;</span>))</span>
-<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
-<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="co">#&gt; ! a reference class instance needs a `json_state()` method for class `Cache` at `x`</span></span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>Cache <span class="ot">&lt;-</span> <span class="fu">setRefClass</span>(<span class="st">&quot;Cache&quot;</span>,</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>  <span class="at">fields =</span> <span class="fu">list</span>(<span class="at">root =</span> <span class="st">&quot;character&quot;</span>, <span class="at">key =</span> <span class="st">&quot;character&quot;</span>)</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a>)</span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a><span class="fu">json_write_str</span>(Cache<span class="sc">$</span><span class="fu">new</span>(<span class="at">root =</span> <span class="fu">tempdir</span>(), <span class="at">key =</span> <span class="st">&quot;s3cret&quot;</span>))</span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a><span class="co">#&gt; ! a reference class instance needs a `json_state()` method for class `Cache` at `x`</span></span></code></pre></div>
 <p>A method registered on the concrete class settles it, and so does one
 on any class between that and <code>envRefClass</code>, since the chain
 is what the writer looks along and what the document records. The
@@ -598,20 +663,23 @@ refusal itself sits on the <code>envRefClass</code> rung, so that rung
 is taken, exactly as <code>R6</code> is. The generator is refused rather
 than recorded by the class it names, which is where this differs from
 the two above: walking into one reaches the internals of the
-<code>methods</code> package rather than anything the class
-declares.</p>
+<code>methods</code> package rather than anything the class declares.
+The same walk keeps an instance refused under the
+<code>self_contained</code> flag, since the instance binds its class
+definition, and a method of its own does not settle it there, the flag
+asking none.</p>
 <p>The refusal follows the label rather than the shape, and only a class
 system saying its instances are more than their bindings is such a
 label. An environment you have classed yourself says nothing of the
 kind, so the environment rule applies to it and its contents are written
 — the credential included.</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>vault <span class="ot">&lt;-</span> <span class="fu">new.env</span>()</span>
-<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>vault<span class="sc">$</span>root <span class="ot">&lt;-</span> <span class="fu">tempdir</span>()</span>
-<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>vault<span class="sc">$</span>key <span class="ot">&lt;-</span> <span class="st">&quot;s3cret&quot;</span></span>
-<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a><span class="fu">class</span>(vault) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;MyVault&quot;</span>, <span class="st">&quot;environment&quot;</span>)</span>
-<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a></span>
-<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="fu">json_write_str</span>(vault)</span>
-<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~a\&quot;:{\&quot;class\&quot;:[\&quot;MyVault\&quot;,\&quot;environment\&quot;]},\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;}},\&quot;bindings\&quot;:{\&quot;key\&quot;:\&quot;s3cret\&quot;,\&quot;root\&quot;:\&quot;/tmp/Rtmpv5wwa5\&quot;</span><span class="re">}}}</span><span class="co">&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>vault <span class="ot">&lt;-</span> <span class="fu">new.env</span>()</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>vault<span class="sc">$</span>root <span class="ot">&lt;-</span> <span class="fu">tempdir</span>()</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>vault<span class="sc">$</span>key <span class="ot">&lt;-</span> <span class="st">&quot;s3cret&quot;</span></span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="fu">class</span>(vault) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;MyVault&quot;</span>, <span class="st">&quot;environment&quot;</span>)</span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a></span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a><span class="fu">json_write_str</span>(vault)</span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~a\&quot;:{\&quot;class\&quot;:[\&quot;MyVault\&quot;,\&quot;environment\&quot;]},\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;}},\&quot;bindings\&quot;:{\&quot;key\&quot;:\&quot;s3cret\&quot;,\&quot;root\&quot;:\&quot;/tmp/tk-e61d43ad63941/RtmpWglkdF\&quot;</span><span class="re">}}}</span><span class="co">&quot;</span></span></code></pre></div>
 <p>That is the environment rule holding rather than a hole in it. An
 environment is its contents, which is what base R’s
 <code>serialize()</code> records as well and what

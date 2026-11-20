@@ -149,6 +149,14 @@ lockEnvironment(counter, bindings = TRUE)
 json_write_str(counter)
 
 ## -----------------------------------------------------------------------------
+clock <- new.env(parent = globalenv())
+makeActiveBinding("now", Sys.time, clock)
+
+json_write_str(clock)
+
+bindingIsActive("now", json_read_str(json_write_str(clock)))
+
+## -----------------------------------------------------------------------------
 identical(function(x) x + 1, function(x) x + 1)
 
 ## -----------------------------------------------------------------------------
@@ -202,8 +210,65 @@ back <- json_read_str(json_write_str(frame()))
 
 identical(parent.env(back)$inner, back)
 
+## ----eval = requireNamespace("S7", quietly = TRUE)----------------------------
+Archived <- local(
+  S7::new_class(
+    "Archived", properties = list(n = S7::class_double), package = "somepkg"
+  ),
+  globalenv()
+)
+
+json_write_str(Archived(n = 1))
+
+## ----eval = requireNamespace("R6", quietly = TRUE)----------------------------
+Tally <- R6::R6Class("Tally", public = list(n = 0))
+
+json_write_str(Tally)
+
+json_write_str(Tally, self_contained = TRUE)
+
+## ----eval = requireNamespace("R6", quietly = TRUE)----------------------------
+Meter <- R6::R6Class("Meter",
+  public = list(
+    n = 0,
+    add = function(by = 1) {
+      self$n <- self$n + by
+      invisible(self)
+    }
+  ),
+  cloneable = FALSE
+)
+
+meter <- Meter$new()$add(2)
+
+json_write_str(meter, self_contained = TRUE)
+
+## ----eval = requireNamespace("R6", quietly = TRUE)----------------------------
+back <- json_read_str(json_write_str(meter, self_contained = TRUE))
+
+back$add()$n
+
+## ----eval = requireNamespace("R6", quietly = TRUE)----------------------------
+Bare <- R6::R6Class("Tally", public = list(n = 0), cloneable = FALSE)
+
+c(
+  cloneable = nchar(json_write_str(Tally$new(), self_contained = TRUE)),
+  bare = nchar(json_write_str(Bare$new(), self_contained = TRUE))
+)
+
+## -----------------------------------------------------------------------------
+json_write_str(acct)
+
+json_write_str(acct, self_contained = TRUE)
+
 ## -----------------------------------------------------------------------------
 json_read_str("[1, 9007199254740993]")
+
+## ----error = TRUE-------------------------------------------------------------
+try({
+doc <- '{"by": {"~t": "language", "~v": ["~:Sys.getenv", "HOME"]}}'
+json_read_str(doc, code = FALSE)
+})
 
 ## -----------------------------------------------------------------------------
 adder_class <- function(n) {

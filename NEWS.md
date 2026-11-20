@@ -1,3 +1,38 @@
+# typedjson 0.1.2
+
+## New features
+
+* Both writers take `self_contained`, for a document meant as an archive.
+  It carries every S7 class definition and `R6` generator, and writes `R6` instances whole, so the document reads where the class is gone.
+  It asks no `json_state()` method that a class author wrote.
+  See `vignette("design")` for what it still records by name (#65, #69, #73, #101).
+
+* Both readers take `code`, for a document that cannot be trusted.
+  Set to `FALSE`, they read it as data alone.
+  Every value that is code, or that the reader would call into R to rebuild or check, is refused with an error of class `typedjson_code_refusal` (#121).
+
+* An active binding is recorded by the function it runs and comes back active, so an environment holding one round-trips rather than being refused.
+  Neither the writer nor the reader calls the function (#99).
+
+## Bug fixes
+
+* S7 objects round-trip under S7 1.0.0, and objects written together come back sharing one class reference.
+  A document written with an older S7 still reads, while one holding a class reference needs S7 1.0.0 (#120).
+
+* Reading a document no longer runs a call recorded with the S4 bit or an `S7_class` attribute (#96).
+
+* A document that carries attributes on an environment recorded by name, such as the global environment, is refused.
+  The reader used to set them on that environment, where they stayed for the rest of the session (#103).
+
+* The S4 bit, and with it the class's validity check, comes back on complex, raw, language, pairlist, environment and function values.
+  A document can no longer set the bit on an object R shares, such as `NULL` or a symbol, where it stayed for the rest of the session (#96).
+
+* A function definition inside a body no longer carries the file it was parsed from into the document (#98).
+
+* A document that R refuses partway through a read, such as one whose `dim` does not fit its value, no longer stays in memory for the rest of the session (#110).
+
+* Reading a long name no longer understates R's count of vector memory, which could wrap past zero (#116).
+
 # typedjson 0.1.1
 
 * Installs cleanly with GCC 16 under link-time optimization, where 0.1.0 drew a spurious `-Wstringop-overflow` warning (#86).

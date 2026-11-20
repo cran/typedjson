@@ -229,6 +229,21 @@ corpus_env_contents <- function() {
   lockBinding("k", locked)
   lockEnvironment(locked)
 
+  # The setter closes over the environment it is bound in, which is a cycle.
+  active <- corpus_env(n = 2)
+  makeActiveBinding(
+    "twice",
+    corpus_closure(
+      "function(value) if (missing(value)) n * 2 else n <<- value / 2", active
+    ),
+    active
+  )
+
+  sealed <- corpus_env(k = 1)
+  makeActiveBinding("live", corpus_closure("function() 42"), sealed)
+  lockBinding("live", sealed)
+  lockEnvironment(sealed)
+
   list(
     "env/contents/empty" = corpus_env(),
     "env/contents/global-parent" = corpus_env(n = 1L, parent = globalenv()),
@@ -246,7 +261,9 @@ corpus_env_contents <- function() {
       class = "corpus_class", meta = c(a = 1L)
     ),
     "env/contents/dotted" = corpus_env(.hidden = 1L, visible = 2L),
-    "env/contents/closure" = corpus_env(f = mean)
+    "env/contents/closure" = corpus_env(f = mean),
+    "env/contents/active" = active,
+    "env/contents/active-locked" = sealed
   )
 }
 
@@ -286,14 +303,6 @@ corpus_shared <- function() {
   )
 }
 
-corpus_env_active <- function() {
-
-  env <- corpus_env(n = 1L)
-  makeActiveBinding("live", function() 42, env)
-
-  env
-}
-
 corpus_env_promise <- function() {
 
   env <- corpus_env(n = 1L)
@@ -310,18 +319,22 @@ corpus_env_missing <- function() {
   env
 }
 
-round_trip_failures <- function(values) {
+round_trip_failures <- function(values, self_contained = FALSE, code = TRUE,
+                                same = identical) {
 
   failed <- character()
 
   for (nm in names(values)) {
 
     got <- tryCatch(
-      json_read_str(json_write_str(values[[nm]])),
+      json_read_str(
+        json_write_str(values[[nm]], self_contained = self_contained),
+        code = code
+      ),
       error = function(e) structure(conditionMessage(e), class = "corpus_error")
     )
 
-    if (!identical(got, values[[nm]])) {
+    if (!same(got, values[[nm]])) {
       failed <- c(failed, nm)
     }
   }
@@ -389,10 +402,6 @@ corpus_refused <- function() {
   )
 
   refused <- list(
-    "env/active-binding" = list(
-      value = corpus_env_active(), message = "cannot write an active binding",
-      path = "x$bindings$live"
-    ),
     "env/promise" = list(
       value = corpus_env_promise(), type = "promise", path = "x$bindings$lazy"
     ),
@@ -461,6 +470,8 @@ corpus_refused <- function() {
   )
 
   if (!requireNamespace("S7", quietly = TRUE)) return(refused)
+  # Updated S7 resolves these constructor bindings instead of keeping promises.
+  if (utils::packageVersion("S7") > "0.2.2") return(refused)
 
   # Both of these are the walk inside S7's own machinery, which is what
   # recording a class by what identifies it keeps it out of. The first is
@@ -489,9 +500,12 @@ s7_class_kinds <- c(
 )
 
 corpus_s7_s3_property <- function() {
-  S7::new_class(
-    "CorpusS7S3", properties = list(f = S7::new_S3_class("CorpusS3Fac")),
-    package = NULL
+  local(
+    S7::new_class(
+      "CorpusS7S3", properties = list(f = S7::new_S3_class("CorpusS3Fac")),
+      package = NULL
+    ),
+    envir = globalenv()
   )
 }
 
@@ -515,6 +529,13 @@ needs_ref_method <- function(class) {
 no_ref_generator <- function(class) {
   paste0(
     "cannot write the generator of the reference class `", class, "`"
+  )
+}
+
+no_self_contained_ref <- function(class) {
+  paste0(
+    "cannot write an instance of the reference class `", class,
+    "` in a self-contained document"
   )
 }
 
@@ -601,6 +622,28 @@ r6_document <- function(class, package = '"R_GlobalEnv"', public = "null",
     paste0(
       '{"package":', package, ',"public":', public, ',"private":', private, "}"
     )
+  )
+}
+
+r6_class_document <- function(...) {
+
+  keys <- list(
+    attributes = paste0(
+      '{"name":"CorpusR6Spelled_generator","class":"R6ClassGenerator"}'
+    ),
+    bindings = paste0(
+      '{"classname":"CorpusR6Spelled",',
+      '"parent_env":{"~t":"environment","~v":{"name":"R_GlobalEnv"}}}'
+    )
+  )
+
+  edits <- list(...)
+  keys[names(edits)] <- edits
+
+  paste0(
+    '{"~r6class":{',
+    paste0('"', names(keys), '":', unlist(keys), collapse = ","),
+    "}}"
   )
 }
 
@@ -745,16 +788,21 @@ r6_shape_grid <- function() {
   c(r6_shape_solo(), r6_shape_chain(), r6_shape_deep(), r6_shape_refused())
 }
 
-r6_shape_noop <- function() NULL
-
 # The test environment binds every helper defined in this file, so a hook
 # enclosed in it would be written as a reference cycle rather than as the
 # field the shape places.
 r6_shape_hook <- local(function() NULL, globalenv())
 
-r6_shape_binding <- function(value) {
-  if (missing(value)) 1 else stop("read-only")
-}
+# A definition the `self_contained` flag writes carries the methods and active
+# bindings a shape places, so those are enclosed the same way.
+r6_shape_noop <- local(function() NULL, globalenv())
+
+r6_shape_binding <- local(
+  function(value) {
+    if (missing(value)) 1 else stop("read-only")
+  },
+  globalenv()
+)
 
 r6_shape_values <- list(
   1L, "a", c(TRUE, NA), NULL, 2.5, as.raw(c(0, 255)), c(x = 1L, y = 2L)
@@ -937,12 +985,34 @@ r6_shape_label <- function(spec, id) {
   )
 }
 
-r6_shape_failures <- function(specs) {
+# A class the flag carries is rebuilt rather than found, so what has to settle
+# is the document and the shape an instance of the rebuilt class takes.
+r6_class_settles <- function(spec, id) {
+
+  gen <- r6_shape_class(spec, id)
+
+  tryCatch(
+    {
+      doc <- json_write_str(gen, self_contained = TRUE)
+      back <- json_read_str(doc)
+
+      !identical(back, gen) &&
+        identical(json_write_str(back, self_contained = TRUE), doc) &&
+        identical(
+          r6_shape_surface(suppressMessages(back$new())),
+          r6_shape_surface(suppressMessages(gen$new()))
+        )
+    },
+    error = function(e) FALSE
+  )
+}
+
+r6_shape_failures <- function(specs, settles = r6_shape_settles) {
 
   failed <- character()
 
   for (id in seq_along(specs)) {
-    if (!r6_shape_settles(specs[[id]], id)) {
+    if (!settles(specs[[id]], id)) {
       failed <- c(failed, r6_shape_label(specs[[id]], id))
     }
   }
@@ -1118,6 +1188,12 @@ corpus_closures_local <- function() {
     )(),
     "closure/local/holding-closure" = corpus_closure(
       "function() { f <- mean; function(x) f(x) }"
+    )(),
+    "closure/local/active" = corpus_closure(
+      paste(
+        "function() {",
+        "makeActiveBinding(\"a\", function() 1, environment()); function() a }"
+      )
     )()
   )
 }

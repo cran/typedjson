@@ -350,7 +350,7 @@ exists only inside the running session and does not survive being
 written down. An environment is recorded — by name where a name finds it
 again, by its contents otherwise — but only as far as what it binds, so
 one holding an external pointer is refused with it, as is one holding a
-promise or an active binding, since reading either would run code.</p>
+promise, since forcing one would run code.</p>
 <p>A connection is the case worth walking through, because it does not
 look like a handle. It prints as a small integer, and an integer is
 data.</p>
@@ -369,7 +369,7 @@ Neither means anything in the session that reads the document back, so
 the writer refuses.</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">json_write_str</span>(con)</span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `x$conn_id`</span></span></code></pre></div>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `attr(x, &quot;conn_id&quot;)`</span></span></code></pre></div>
 <p>Refusing is the whole point. Writing the integer would hand back a
 number indexing whatever connection occupies that slot next, and writing
 <code>null</code> would drop the handle quietly; either way the damage
@@ -413,7 +413,7 @@ an integer and a connection, and writing it fails on the third
 field.</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">json_write_str</span>(reader)</span>
 <span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
-<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `x$con$conn_id`</span></span></code></pre></div>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `attr(x$con, &quot;conn_id&quot;)`</span></span></code></pre></div>
 </div>
 <div id="what-to-record" class="section level2">
 <h2>What to record</h2>
@@ -435,7 +435,7 @@ and how far into the file it has got.</p>
 <span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="co">#&gt;   &quot;~x&quot;: {</span></span>
 <span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co">#&gt;     &quot;class&quot;: &quot;chunk_reader&quot;,</span></span>
 <span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co">#&gt;     &quot;state&quot;: {</span></span>
-<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co">#&gt;       &quot;path&quot;: &quot;/tmp/Rtmpv5wwa5/events.log&quot;,</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co">#&gt;       &quot;path&quot;: &quot;/tmp/tk-e61d43ad63941/RtmpWglkdF/events.log&quot;,</span></span>
 <span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="co">#&gt;       &quot;size&quot;: 2,</span></span>
 <span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="co">#&gt;       &quot;offset&quot;: 32.0</span></span>
 <span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="co">#&gt;     }</span></span>
@@ -491,7 +491,7 @@ your method’s decision rather than the format’s. The method above opens
 eagerly, so it reports the problem as soon as the document is read.</p>
 <div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">json_read_str</span>(<span class="fu">sub</span>(<span class="fu">basename</span>(path), <span class="st">&quot;no-such-file&quot;</span>, doc, <span class="at">fixed =</span> <span class="cn">TRUE</span>))</span>
 <span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="co">#&gt; Warning in file(state$path, open = &quot;r&quot;): cannot open file</span></span>
-<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="co">#&gt; &#39;/tmp/Rtmpv5wwa5/no-such-file&#39;: No such file or directory</span></span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="co">#&gt; &#39;/tmp/tk-e61d43ad63941/RtmpWglkdF/no-such-file&#39;: No such file or directory</span></span>
 <span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a><span class="co">#&gt; Error in `file()`:</span></span>
 <span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="co">#&gt; ! cannot open the connection</span></span></code></pre></div>
 <p>Opening lazily on the first <code>read_next()</code> call, or falling
@@ -514,7 +514,7 @@ written with the rest of the object.</p>
 <span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>leaky <span class="ot">&lt;-</span> <span class="fu">structure</span>(<span class="fu">list</span>(<span class="at">con =</span> <span class="fu">file</span>(path)), <span class="at">class =</span> <span class="st">&quot;leaky&quot;</span>)</span>
 <span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a><span class="fu">json_write_str</span>(leaky)</span>
 <span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
-<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `x$state$con$conn_id`</span></span></code></pre></div>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `attr(x$state$con, &quot;conn_id&quot;)`</span></span></code></pre></div>
 </div>
 <div id="a-class-with-no-default-to-fall-back-on" class="section level2">
 <h2>A class with no default to fall back on</h2>
@@ -564,7 +564,7 @@ that does the refusing.</p>
 <span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a></span>
 <span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="fu">json_write_str</span>(reader)</span>
 <span id="cb14-15"><a href="#cb14-15" tabindex="-1"></a><span class="fu">cat</span>(doc)</span>
-<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="co">#&gt; {&quot;~x&quot;:{&quot;class&quot;:[&quot;ChunkReader&quot;,&quot;R6&quot;],&quot;state&quot;:{&quot;path&quot;:&quot;/tmp/Rtmpv5wwa5/events.log&quot;,&quot;size&quot;:2,&quot;offset&quot;:16.0</span><span class="re">}}}</span></span>
+<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="co">#&gt; {&quot;~x&quot;:{&quot;class&quot;:[&quot;ChunkReader&quot;,&quot;R6&quot;],&quot;state&quot;:{&quot;path&quot;:&quot;/tmp/tk-e61d43ad63941/RtmpWglkdF/events.log&quot;,&quot;size&quot;:2,&quot;offset&quot;:16.0</span><span class="re">}}}</span></span>
 <span id="cb14-17"><a href="#cb14-17" tabindex="-1"></a></span>
 <span id="cb14-18"><a href="#cb14-18" tabindex="-1"></a>revived <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(doc)</span>
 <span id="cb14-19"><a href="#cb14-19" tabindex="-1"></a>revived<span class="sc">$</span><span class="fu">read_next</span>()</span>
@@ -582,6 +582,21 @@ handle it never held. That hazard is one of the reasons an
 <code>R6</code> instance has no default in the first place, and
 <code>vignette(&quot;r6&quot;)</code> walks through deciding what a class’s state
 actually is.</p>
+<p>A document written with the <code>self_contained</code> flag asks
+neither pair on this page. Such a document is read without the class’s
+code, which the record a method writes needs to come back, so each
+reader is written there as though its class had no method, the S3 one as
+the list it is and this one whole, as the environment it is. Both stop
+the write at the connection they hold, which no document can carry.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>s3_reader <span class="ot">&lt;-</span> <span class="fu">chunk_reader</span>(path)</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>r6_reader <span class="ot">&lt;-</span> ChunkReader<span class="sc">$</span><span class="fu">new</span>(path)</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a><span class="fu">json_write_str</span>(s3_reader, <span class="at">self_contained =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `attr(x$con, &quot;conn_id&quot;)`</span></span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a><span class="fu">json_write_str</span>(r6_reader, <span class="at">self_contained =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `attr(x$bindings$con, &quot;conn_id&quot;)`</span></span></code></pre></div>
 </div>
 
 

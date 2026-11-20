@@ -138,3 +138,16 @@ revived$read_next()
 close(reader$con)
 close(revived$con)
 
+## ----error = TRUE, eval = requireNamespace("R6", quietly = TRUE)--------------
+try({
+s3_reader <- chunk_reader(path)
+r6_reader <- ChunkReader$new(path)
+
+json_write_str(s3_reader, self_contained = TRUE)
+json_write_str(r6_reader, self_contained = TRUE)
+})
+
+## ----include = FALSE, eval = requireNamespace("R6", quietly = TRUE)-----------
+close(s3_reader$con)
+close(r6_reader$con)
+

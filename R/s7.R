@@ -24,21 +24,31 @@ json_state.S7_any <- function(x) s7_class_state(x)
 #' @export
 json_state.S7_missing <- function(x) s7_class_state(x)
 
+# From S7 1.0.0 an object holds its class behind a class reference. That is
+# an environment whose `class` binding is the class, and the objects of one
+# class share it. The reference is recorded by the class it holds. Like an
+# environment, it goes into the reference table, so the objects of one
+# document share one class reference again on the way back.
+#' @export
+json_state.S7_class_ref <- function(x) {
+  tagged_state(tag_s7, list(class_ref = x$class))
+}
+
 s7_class_state <- function(x) {
   tagged_state(tag_s7, s7_record(x))
 }
 
-# Every refusal a walk into a class object hits is inside S7's own machinery
-# rather than in the class an author wrote — a base class holds a validator
-# closing over the promise that built it — so the walk never enters one.
-# Each form below records what identifies the class instead.
+# A class object is mostly S7's own machinery rather than the class an author
+# wrote, so the walk never enters one. Before S7 1.0.0 a walk was refused
+# there, since a base class held a validator closing over the promise that
+# built it. Each form below records what identifies the class instead.
 s7_record <- function(x) {
 
   if (inherits(x, "S7_class")) {
 
     package <- attr(x, "package")
 
-    if (!is.null(package)) {
+    if (!is.null(package) && !writer_self_contained$on()) {
       return(list(class = attr(x, "name"), package = package))
     }
   }
@@ -69,14 +79,42 @@ s7_record <- function(x) {
   )
 }
 
+# The package a class was scoped by travels with its definition, since the
+# class vector an instance records is qualified by it and the check on the way
+# back compares the two. Dropping it would rebuild a class of the same name
+# that the object recording `pkg::Cls` no longer belongs to. A class with no
+# package leaves the key out rather than spelling it `null`, so the document
+# such a class has always written is unchanged.
 s7_definition <- function(x) {
-  list(
-    class = attr(x, "name"),
-    parent = attr(x, "parent"),
-    properties = attr(x, "properties"),
-    abstract = attr(x, "abstract"),
-    constructor = attr(x, "constructor"),
-    validator = attr(x, "validator")
+
+  # From S7 1.0.0 the constructor of a class gets an environment of its own.
+  # That environment binds the class reference, and its parent is where the
+  # constructor was defined. The `new_class()` call on the way back adds such
+  # an environment again, so the constructor is recorded as it was defined,
+  # and a class read back writes the document it came from.
+  constructor <- attr(x, "constructor")
+  constructor_env <- environment(constructor)
+
+  if (!is.null(get0(".S7_class_ref", constructor_env, inherits = FALSE))) {
+    environment(constructor) <- parent.env(constructor_env)
+  }
+
+  named <- list(class = attr(x, "name"))
+  package <- attr(x, "package")
+
+  if (!is.null(package)) {
+    named[["package"]] <- package
+  }
+
+  c(
+    named,
+    list(
+      parent = attr(x, "parent"),
+      properties = attr(x, "properties"),
+      abstract = attr(x, "abstract"),
+      constructor = constructor,
+      validator = attr(x, "validator")
+    )
   )
 }
 
@@ -154,6 +192,19 @@ s7_revive <- function(state) {
     )
   }
 
+  if (!is.null(state[["class_ref"]])) {
+    return(s7_class_ref(state[["class_ref"]]))
+  }
+
+  # A definition carries a constructor and a reference does not, so the
+  # constructor is what tells the two apart. That leaves `package` meaning
+  # what it means everywhere else — the package the class belongs to —
+  # rather than doubling as the marker of which form this is, which is what
+  # lets an embedded definition keep the package that qualifies its name.
+  if (!is.null(state[["constructor"]])) {
+    return(s7_class(state))
+  }
+
   if (!is.null(state[["package"]])) {
     return(s7_generator(state))
   }
@@ -167,6 +218,30 @@ s7_revive <- function(state) {
   }
 
   s7_class(state)
+}
+
+# S7 1.0.0 binds the reference of a class in the environment of its
+# constructor, and an object of the class holds that reference. A class that
+# an older S7 built binds none, as in a package installed before S7 was
+# updated. S7 1.0.0 then stores the class itself in an object, and so does the
+# read. An older S7 reads neither form from `_S7_class`, so it cannot revive a
+# class reference at all.
+s7_class_ref <- function(class) {
+
+  if (!inherits(class, "S7_class")) {
+    stop("a recorded S7 class reference needs an S7 class", call. = FALSE)
+  }
+
+  if (package_version(getNamespaceVersion(need_s7())) < "1.0.0") {
+    stop(
+      "an S7 class reference needs the S7 package 1.0.0 or later",
+      call. = FALSE
+    )
+  }
+
+  get0(
+    ".S7_class_ref", environment(class), inherits = FALSE, ifnotfound = class
+  )
 }
 
 s7_generator <- function(state) {
@@ -235,10 +310,26 @@ s7_class <- function(state) {
   # Building one without a constructor would close the one S7 makes over this
   # frame, so the document supplies it or names a package to look the class
   # up in instead.
-  if (!is.function(state[["constructor"]])) {
+  if (is.null(state[["constructor"]])) {
     stop(
       "a recorded S7 class needs a `package` to find it in or a ",
       "`constructor` to rebuild it from", call. = FALSE
+    )
+  }
+
+  if (!is.function(state[["constructor"]])) {
+    stop(
+      "the `constructor` of a recorded S7 class has to be a function",
+      call. = FALSE
+    )
+  }
+
+  package <- state[["package"]]
+
+  if (!is.null(package) && (!is_one_string(package) || !nzchar(package))) {
+    stop(
+      "the `package` of a recorded S7 class has to be one non-empty string",
+      call. = FALSE
     )
   }
 
@@ -260,7 +351,7 @@ s7_class <- function(state) {
   S7::new_class(
     name = name,
     parent = state[["parent"]],
-    package = NULL,
+    package = package,
     properties = properties,
     abstract = isTRUE(state[["abstract"]]),
     constructor = state[["constructor"]],
@@ -283,11 +374,11 @@ validate_s7 <- function(x) {
 
   # A foreign document is free to spell the attribute as anything it likes,
   # and only a generator declares the properties to check an object against.
-  if (!is_s7_object(x) || !requireNamespace("S7", quietly = TRUE)) {
+  if (!requireNamespace("S7", quietly = TRUE) || !is_s7_object(x)) {
     return(invisible(NULL))
   }
 
-  cls <- attr(x, "S7_class")
+  cls <- S7::S7_class(x)
 
   # The class vector is an ordinary attribute and the generator resolves
   # without reading it, so a document where the two disagree would dispatch
@@ -304,7 +395,7 @@ validate_s7 <- function(x) {
 }
 
 is_s7_object <- function(x) {
-  inherits(attr(x, "S7_class"), "S7_class") && inherits(x, "S7_object")
+  inherits(x, "S7_object") && !is.null(S7::S7_class(x))
 }
 
 is_s7_generator <- function(x, class) {

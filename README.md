@@ -1,8 +1,13 @@
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
 # Typed JSON for R values
 
 <!-- badges: start -->
+
 [![R-CMD-check](https://github.com/nbenn/typedjson/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/nbenn/typedjson/actions/workflows/R-CMD-check.yaml)
 [![codecov](https://codecov.io/gh/nbenn/typedjson/graph/badge.svg?token=S92ZXN953A)](https://app.codecov.io/gh/nbenn/typedjson)
+[![CRAN status](https://www.r-pkg.org/badges/version/typedjson)](https://CRAN.R-project.org/package=typedjson)
 <!-- badges: end -->
 
 The typedjson package writes an R value as JSON a human can read, and reads it back unchanged.
@@ -13,13 +18,13 @@ This package keeps ordinary JSON for ordinary values and annotates only what JSO
 
 ## Installation
 
-```r
+``` r
 install.packages("typedjson")
 ```
 
 Or the development version from GitHub:
 
-```r
+``` r
 # install.packages("pak")
 pak::pak("nbenn/typedjson")
 ```
@@ -28,7 +33,7 @@ pak::pak("nbenn/typedjson")
 
 Both are properties rather than examples, and both are what the test suite checks over a corpus of about 500 values — every atomic type at every length crossed with every way of naming it, every list configuration, the language types, a board produced by `blockr.core::blockr_ser()` — each of them also checked in every position it can occupy, plus a thousand fuzzed values on top.
 
-```r
+``` r
 identical(json_read(json_write(x, path)), x)   # for every supported R value
 json_write_str(json_read_str(doc)) == doc      # for any document this package writes
 ```
@@ -40,7 +45,7 @@ The second holds modulo whitespace and key order: attributes come back as a set,
 Two rules decide the shape. A JSON array of scalars is an atomic vector and a JSON object is a named list, so both containers mean what they mean everywhere else. A length-one vector is written bare wherever an array could not be mistaken for it.
 
 | R value | Document |
-| --- | --- |
+|----|----|
 | `1L` | `1` |
 | `1` | `1.0` |
 | `"a"` | `"a"` |
@@ -60,16 +65,16 @@ A named atomic vector is the one value that pays for this. It is not an object, 
 
 Typed `NA`, `Inf`, `-Inf` and `NaN` become prefix-tagged strings, and any ordinary string beginning with the prefix is escaped by doubling it. The escape closes the ambiguity by construction rather than by choosing a spelling nobody uses, which is what makes a link input of `"Inf"` restore as the string it was.
 
-| R value | Document |
-| --- | --- |
-| `NA_real_` | `"~zNA_real_"` |
+| R value     | Document        |
+|-------------|-----------------|
+| `NA_real_`  | `"~zNA_real_"`  |
 | `c(1, Inf)` | `[1.0,"~zInf"]` |
-| `"~foo"` | `"~~foo"` |
-| `"Inf"` | `"Inf"` |
+| `"~foo"`    | `"~~foo"`       |
+| `"Inf"`     | `"Inf"`         |
 
 Anything carrying attributes escalates to a tagged object carrying the attributes recursively. One rule covers `Date`, `POSIXct`, factors, matrices, data frames and classed lists, because in R every one of them is a base type plus attributes. Empty typed vectors escalate for the same reason: `[]` has no element in which to carry a type.
 
-```r
+``` r
 json_write_str(as.Date("2026-01-01"))
 #> {"~a":{"class":"Date"},"~v":20454.0}
 
@@ -89,7 +94,7 @@ The type rides in the payload too, wherever the payload can state it — the dec
 A call is its elements, so it is written as them, with the argument names R stores as tags riding in the payload. Nothing is deparsed, which matters because a call may carry an arbitrary R object as a constant in its tree: `str2lang(deparse(x))` hands back a call to `c()` where a double vector went in, and a constant needing more than 15 significant digits comes back rounded.
 
 | R value | Document |
-| --- | --- |
+|----|----|
 | `as.name("x")` | `"~:x"` |
 | `quote(mpg ~ wt)` | `{"~t":"language","~v":["~:~","~:mpg","~:wt"]}` |
 | `quote(f(0.1, a = x))` | `{"~t":"language","~v":{"":"~:f","":0.1,"a":"~:x"}}` |
@@ -103,11 +108,9 @@ This is what makes an object carrying a recorded call writable — a caught cond
 
 A closure is formals, body and environment, so once those three are writable it is too. It compares by its parts rather than by reference — `identical(function(x) x + 1, function(x) x + 1)` is `TRUE` — and so it round-trips exactly wherever the environment it closes over is recorded by name, and up to the same equivalence an environment does wherever that environment is recorded by contents.
 
-```r
+``` r
 json_write_str(mean)
-#> {"~t":"closure","~v":{"formals":{"~t":"pairlist","~v":{"x":"~:","...":"~:"}},
-#>  "body":{"~t":"language","~v":["~:UseMethod",["mean"]]},
-#>  "environment":{"~t":"environment","~v":{"name":"namespace:base"}}}}
+#> {"~t":"closure","~v":{"formals":{"~t":"pairlist","~v":{"x":"~:","...":"~:"}},"body":{"~t":"language","~v":["~:UseMethod",["mean"]]},"environment":{"~t":"environment","~v":{"name":"namespace:base"}}}}
 
 json_write_str(sum)
 #> {"~t":"builtin","~v":"sum"}
@@ -119,13 +122,15 @@ A primitive closes over nothing, so it is recorded by the name that finds it aga
 
 S3 falls out with no special case: an S3 object is a base type plus a `class` attribute. S4 falls out too, with the S4 bit recorded separately, and an S4 object is rebuilt from its own contents — the class definition is needed to *use* it, not to read it back.
 
-S7 needs one special case, since the `S7_class` attribute holds a generator containing constructor closures. The class name and package are recorded and looked up on read, so the object round-trips directly.
+S7 needs one special case, since the attribute holding an object's class leads to a generator containing constructor closures.
+S7 1.0.0 names that attribute `_S7_class`, where an older S7 named it `S7_class`.
+The class name and package are recorded and looked up on read, so the object round-trips directly.
 
 An R6 class generator is recorded by the class it names and the package it was defined in, so it comes back as the object it was written from rather than as a copy. That lookup runs on the way out too: a generator that no name finds again, or a class that names more than one, is refused where it is written rather than on the read that fails months later.
 
 An R6 instance is refused. Every other type here has a value its own type system supplies — an S4 object is its slots as an S7 object is its properties — where an R6 object is defined by what its methods guarantee, and its private fields are private precisely because they are not part of that. Recording one as the bindings it happens to hold is an assertion about the class that only the class can make, so the writer asks instead.
 
-```r
+``` r
 Counter <- R6::R6Class("Counter", public = list(n = 0, bump = function() self$n <- self$n + 1))
 json_write_str(Counter$new())
 #> Error: an `R6` instance needs a `json_state()` method for class `Counter` at `x`
@@ -135,9 +140,9 @@ The method pair below is the answer, and `r6_state()` with `r6_restore()` is the
 
 ## What stays out
 
-Values that are handles rather than data are refused rather than written as something else: an external pointer, plus the two bindings an environment can hold that would have to be run to be read — a promise and an active binding. An error names the path it stopped at, and a closure over a frame holding either one is refused there.
+Values that are handles rather than data are refused rather than written as something else: an external pointer, and a binding holding a promise, which would have to be forced to be read. An error names the path it stopped at, and a closure over a frame holding either one is refused there. An active binding would have to be run to be read as well, so it is recorded by the function it runs instead, and comes back active.
 
-```r
+``` r
 json_write_str(list(a = 1, e = local({delayedAssign("f", stop("!")); environment()})))
 #> Error: cannot write a value of type 'promise' at `x$e$bindings$f`
 ```
@@ -152,7 +157,7 @@ Some JSON is written for a consumer that already defines the shape it expects. T
 
 One distinction survives, because no encoder can recover it by looking. A schema wants a scalar at `additionalProperties` and an array at `required` whatever its length, and at length one a scalar and a one-element array are the same R object — so unboxing everything breaks the second and unboxing nothing breaks the first. The distinction already lives in the value, where `I("x")` differs from `"x"`, and plain mode renders it rather than taking a policy for it.
 
-```r
+``` r
 json_write_str(
   list(
     type = "object",
@@ -167,7 +172,7 @@ json_write_str(
 
 Nothing is written that the value is not. A missing value becomes `null`, which is what JSON spells absence with, and anything the annotations were the only way to write is refused where it sits rather than written as `null`.
 
-```r
+``` r
 json_write_str(list(created = Sys.time(), at = quote(f(x))), typed = FALSE)
 #> Error: cannot write a value of type 'language' as plain JSON at `x$at`
 ```
@@ -176,7 +181,7 @@ Plain output is not read back as the value that wrote it; that is what the defau
 
 ## Reading foreign JSON
 
-One grammar, applied to whatever is handed over. Nothing is inferred from content, only from the lexeme and the shape — no `NA` from `"NA"`, no `Inf` from `"Inf"`, no date from an ISO-8601-looking string, no data frame from an array of objects. There is no strict mode and no lossy mode, because there is only one set of rules.
+One grammar, applied to whatever is handed over. Nothing is inferred from content, only from the lexeme and the shape — no `NA` from `"NA"`, no `Inf` from `"Inf"`, no date from an ISO-8601-looking string, no data frame from an array of objects. There is no lossy mode, because there is only one set of rules.
 
 Integers beyond what R holds are read as doubles, and a number that cannot survive that conversion exactly is reported through a warning naming the literal rather than passed off as exact.
 
@@ -184,11 +189,18 @@ What the `~` prefix reserves is refused outright. A key beginning with a single 
 
 The writer doubles the prefix on a string of your own, which is what makes the namespace safe to reserve in the first place. A document written against a later version of the format therefore fails loudly here instead of coming back as the wrong value.
 
+A document from somewhere it cannot be trusted is read with `code = FALSE`, the one switch a reader takes, which refuses rather than reading anything differently. By default a reader rebuilds whatever a document records, a call or a closure included, and calls into the session's own code where the document names a class to revive or to check. With the flag it does neither, and each such value is refused where it sits, naming the path. Vectors, lists, attributes and the `~z` specials read as they always do, so a factor, a date and a data frame still come back.
+
+``` r
+json_read_str('{"by": {"~t": "language", "~v": ["~:Sys.getenv", "HOME"]}}', code = FALSE)
+#> Error: cannot read a value of type 'language' with `code = FALSE` at `x$by`
+```
+
 ## Persisting a class the default rule does not fit
 
 A class whose instances hold something outside the base-type-plus-attributes model supplies a pair of methods, modeled on the `__getstate__` and `__setstate__` protocol of Python's pickle.
 
-```r
+``` r
 json_state.file_handle <- function(x) list(path = x$path)
 
 json_revive.file_handle <- function(class, state) {
@@ -204,8 +216,8 @@ Worked through end to end in `vignette("handles", package = "typedjson")`: a chu
 
 Measured on one machine, over a 522 KB R value of nested lists of character, double, integer and logical vectors:
 
-| | document | write | read | round-trips exactly |
-| --- | --- | --- | --- | --- |
+|  | document | write | read | round-trips exactly |
+|----|----|----|----|----|
 | `json_write_str()` / `json_read_str()` | 89 KB | 1.9 ms | 1.7 ms | yes |
 | `toJSON()` / `fromJSON()` | 61 KB | 184 ms | 4.5 ms | no |
 | `serializeJSON()` / `unserializeJSON()` | 186 KB | 721 ms | 260 ms | no |

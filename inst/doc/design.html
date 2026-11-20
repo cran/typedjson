@@ -374,34 +374,49 @@ The first says that a value survives the trip.</p>
 under the same grammar rather than a separate lossy mode. It holds for
 every document this package writes; a foreign one settles after a single
 round trip, since a mixed-type array such as <code>[1, &quot;a&quot;]</code> has
-to come back as a list.</p>
-<p>Three values are not asked to meet the first contract as it stands.
-An environment recorded by its contents comes back as a different
-object, exactly as <code>unserialize(serialize(e, NULL))</code> does, so
-the property it holds is stated as the weaker one rather than left to
-make <code>identical()</code> the wrong test — and a closure over such
-an environment is stated the same way, since it is that environment plus
-a formals and a body that do come back identical. An S7 class a document
+to come back as a list. A writer flag is what qualifies it, since a
+document holds its bytes where it is read and written the same way: the
+<code>self_contained</code> flag below is the case that matters, a
+carried definition being recorded as a name again by a writer that was
+not asked for one, or refused by it where the definition is of an
+<code>R6</code> class.</p>
+<p>Four values are not asked to meet the first contract as it stands. An
+environment recorded by its contents comes back as a different object,
+exactly as <code>unserialize(serialize(e, NULL))</code> does, so the
+property it holds is stated as the weaker one rather than left to make
+<code>identical()</code> the wrong test — and a closure over such an
+environment is stated the same way, since it is that environment plus a
+formals and a body that do come back identical. An S7 class a document
 carries the definition of is the first case reached through a class
 rather than through an environment written on its own: S7 builds the
 constructor of a class that has a parent in an environment of its own,
 that environment is recorded by its contents like any other, and so no
-by-value scheme can hand back the object that was written. Base R does
-not manage it either,
+by-value scheme can hand back the object that was written. From S7 1.0.0
+that holds for every class, since <code>new_class()</code> gives each
+constructor an environment of its own, and the read builds a new one.
+Base R does not manage it either,
 <code>identical(unserialize(serialize(x, NULL)), x)</code> being
-<code>FALSE</code> for an S7 object in the same session. A string R has
-not declared an encoding for is the same move at a smaller scale: a
-document carries one encoding, so the string comes back declared UTF-8,
-and stating the trip on its bytes is what keeps <code>identical()</code>
-from being the wrong test under a locale that cannot represent them.</p>
+<code>FALSE</code> for an S7 object in the same session. An
+<code>R6</code> class a document carries the definition of goes a step
+further, since the class is an environment itself: it comes back a new
+generator whatever its parts close over, equivalent to the one written
+apart from holding its parent where that held the expression finding
+one. An <code>R6</code> instance the flag writes whole needs no case of
+its own, being an environment recorded by its contents like any other. A
+string R has not declared an encoding for is the same move at a smaller
+scale: a document carries one encoding, so the string comes back
+declared UTF-8, and stating the trip on its bytes is what keeps
+<code>identical()</code> from being the wrong test under a locale that
+cannot represent them.</p>
 <ul>
 <li><strong>Exact.</strong> The relation above, which every other value
 in scope meets, and which an environment recorded by name meets too. A
 string carrying no encoding declaration meets it on its bytes.</li>
-<li><strong>Equivalent.</strong> Same bindings by name and by value,
-same locked and active status, and a parent that is itself equivalent. A
-closure meets it where its formals and body are identical and the
-environment it closes over is equivalent.</li>
+<li><strong>Equivalent.</strong> Same bindings by name and by value, the
+value of an active binding being the function it runs, same locked and
+active status, and a parent that is itself equivalent. A closure meets
+it where its formals and body are identical and the environment it
+closes over is equivalent.</li>
 </ul>
 <p>The second contract is untouched either way: a document written from
 a rebuilt environment writes the same bytes again.</p>
@@ -632,7 +647,7 @@ nothing in the session that reads it back.</p>
 <span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a></span>
 <span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="fu">json_write_str</span>(con)</span>
 <span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `x$conn_id`</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;externalptr&#39; at `attr(x, &quot;conn_id&quot;)`</span></span>
 <span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="fu">json_write_str</span>(con, <span class="at">typed =</span> <span class="cn">FALSE</span>)</span>
 <span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;4&quot;</span></span></code></pre></div>
 <p>The same pointer at value position is still refused here, naming the
@@ -1058,15 +1073,20 @@ attached one.</p>
 plus a <code>class</code> attribute.</p>
 <p>S4 falls out too, since slots are attributes, with two riders — the
 S4 bit is recorded separately because <code>typeof()</code> reports
-<code>S4</code> rather than the data type, and the reader can only
-rebuild if the class definition is loadable.</p>
+<code>S4</code> rather than the data type, and the class definition is
+needed to use the object rather than to read it back.</p>
 <p>S7 needs exactly one special case. Properties are stored as
-attributes and come through the ordinary rule, but the
-<code>S7_class</code> attribute holds the class generator, and a walk
-into one lands in S7’s own machinery rather than in anything the class
-declares — a base class holds a validator closing over the promise that
-built it. So a class is recorded by what identifies it rather than by
-its contents. With that in place an S7 object round-trips directly,
+attributes and come through the ordinary rule, but the attribute holding
+the class does not. S7 1.0.0 names it <code>_S7_class</code> and puts a
+class reference there. That is an environment whose <code>class</code>
+binding is the class generator, and the objects of the class share it.
+An older S7 named it <code>S7_class</code> and put the generator there
+itself. Either way, a walk into the generator lands in S7’s own
+machinery rather than in anything the class declares. Before S7 1.0.0
+the walk was even refused there, since a base class held a validator
+closing over the promise that built it. So a class is recorded by what
+identifies it rather than by its contents, and a class reference by the
+class it holds. With that in place an S7 object round-trips directly,
 which removes the need for a hand-written record layer above it.</p>
 <p>Which of the two forms a class takes is decided by
 <code>package</code>, which S7 sets for a class defined in a package and
@@ -1094,11 +1114,24 @@ the two forms above, recursively.</p>
 <div class="sourceCode" id="cb12"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="st">&quot;class_character&quot;</span><span class="fu">}</span></span></code></pre></div>
 <div class="sourceCode" id="cb13"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;s3&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;factor&quot;</span><span class="ot">]</span><span class="fu">}}</span></span></code></pre></div>
 <div class="sourceCode" id="cb14"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;union&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="st">&quot;class_double&quot;</span><span class="fu">}</span><span class="ot">,</span> <span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="st">&quot;class_character&quot;</span><span class="fu">}</span><span class="ot">]</span><span class="fu">}}</span></span></code></pre></div>
-<p>The class vector is an ordinary attribute and the
-<code>S7_class</code> record resolves without reading it, so the two can
-disagree in a document that has been edited. They are compared where the
-object is rebuilt, since dispatch would otherwise follow the one while
-the properties came from the other.</p>
+<p>A class reference is recorded by the class it holds, in either of the
+two forms. Like an environment, it goes into the reference table, so the
+objects of one document share one class reference again on the way
+back.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class_ref&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="st">&quot;Point&quot;</span><span class="fu">,</span> <span class="dt">&quot;package&quot;</span><span class="fu">:</span> <span class="st">&quot;somepkg&quot;</span><span class="fu">}}}}</span></span></code></pre></div>
+<p>S7 1.0.0 still reads the <code>S7_class</code> attribute, so a
+document written with an older S7 reads as it did. A class that an older
+S7 built has no class reference, as with a package not reinstalled since
+S7 was updated. An object of such a class comes back holding the class
+itself, the way S7 1.0.0 stores it. An older S7 reads neither the
+<code>_S7_class</code> attribute nor a class reference. Where an older
+S7 is installed, the reader refuses a class reference rather than
+rebuild an object that S7 cannot use.</p>
+<p>The class vector is an ordinary attribute and the <code>~s7</code>
+record resolves without reading it, so the two can disagree in a
+document that has been edited. They are compared where the object is
+rebuilt, since dispatch would otherwise follow the one while the
+properties came from the other.</p>
 <p>Both of those rebuild the object from the document rather than
 construct one, which reaches past the point where the class would have
 decided whether to produce it at all: an S4 object arrives without its
@@ -1123,10 +1156,12 @@ document has them that way, and only a validator comparing them will say
 so.</p>
 <p>An R6 generator is a name, and is recorded the way a package-scoped
 S7 class is: by the class it declares rather than by its contents.
-Nothing here embeds, since the environment a generator declares its
-class in is the one it is looked up in, and a generator that environment
-does not find again is refused where it is written.</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~r6class&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;Derived&quot;</span><span class="ot">,</span> <span class="st">&quot;Base&quot;</span><span class="ot">,</span> <span class="st">&quot;R6&quot;</span><span class="ot">]</span><span class="fu">,</span> <span class="dt">&quot;package&quot;</span><span class="fu">:</span> <span class="st">&quot;somepkg&quot;</span><span class="fu">}}</span></span></code></pre></div>
+Nothing here embeds by default, since the environment a generator
+declares its class in is the one it is looked up in, and a generator
+that environment does not find again is refused where it is written.
+Carrying the definition instead is what the <code>self_contained</code>
+flag below asks for.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~r6class&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;Derived&quot;</span><span class="ot">,</span> <span class="st">&quot;Base&quot;</span><span class="ot">,</span> <span class="st">&quot;R6&quot;</span><span class="ot">]</span><span class="fu">,</span> <span class="dt">&quot;package&quot;</span><span class="fu">:</span> <span class="st">&quot;somepkg&quot;</span><span class="fu">}}</span></span></code></pre></div>
 <p>The class has to be recoverable for the document to be readable, so a
 generator that names no class, or that was built inside a function, is
 refused where it is written. Finding it again means scanning the
@@ -1149,12 +1184,14 @@ An R6 object is defined instead by what its methods guarantee, and its
 private fields are private precisely because they are not part of that.
 Recording an instance as the bindings it happens to hold is therefore an
 assertion about the class that only the class can make, so writing one
-is refused, naming the class and the method that would settle it.</p>
-<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>Counter <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Counter&quot;</span>, <span class="at">public =</span> <span class="fu">list</span>(<span class="at">n =</span> <span class="dv">0</span>))</span>
-<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a></span>
-<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">list</span>(<span class="at">a =</span> <span class="dv">1</span>, <span class="at">b =</span> Counter<span class="sc">$</span><span class="fu">new</span>()))</span>
-<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
-<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a><span class="co">#&gt; ! an `R6` instance needs a `json_state()` method for class `Counter` at `x$b`</span></span></code></pre></div>
+is refused, naming the class and the method that would settle it.
+Writing one whole asserts nothing of the kind, and is what the
+<code>self_contained</code> flag below does instead.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>Counter <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Counter&quot;</span>, <span class="at">public =</span> <span class="fu">list</span>(<span class="at">n =</span> <span class="dv">0</span>))</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">list</span>(<span class="at">a =</span> <span class="dv">1</span>, <span class="at">b =</span> Counter<span class="sc">$</span><span class="fu">new</span>()))</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a><span class="co">#&gt; ! an `R6` instance needs a `json_state()` method for class `Counter` at `x$b`</span></span></code></pre></div>
 <p>Worth separating from what this resembles. Recording a constructor
 and the arguments it was called with is sound, because that mapping is
 the class’s own public interface; reaching past <code>initialize</code>
@@ -1163,10 +1200,10 @@ class exists to provide. So the mechanism is offered rather than
 assumed, as the <code>r6_state()</code> and <code>r6_restore()</code>
 pair a class author opts in with, and what it writes is an ordinary
 extension record rather than a tag of its own.</p>
-<div class="sourceCode" id="cb17"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~x&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;Derived&quot;</span><span class="ot">,</span> <span class="st">&quot;Base&quot;</span><span class="ot">,</span> <span class="st">&quot;R6&quot;</span><span class="ot">]</span><span class="fu">,</span></span>
-<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>        <span class="dt">&quot;state&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;package&quot;</span><span class="fu">:</span> <span class="st">&quot;somepkg&quot;</span><span class="fu">,</span></span>
-<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>                  <span class="dt">&quot;public&quot;</span><span class="fu">:</span>  <span class="fu">{</span><span class="dt">&quot;n&quot;</span><span class="fu">:</span> <span class="dv">6</span><span class="fu">,</span> <span class="dt">&quot;tag&quot;</span><span class="fu">:</span> <span class="st">&quot;t1&quot;</span><span class="fu">},</span></span>
-<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>                  <span class="dt">&quot;private&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;extra&quot;</span><span class="fu">:</span> <span class="st">&quot;e&quot;</span><span class="fu">,</span> <span class="dt">&quot;seed&quot;</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">}}}}</span></span></code></pre></div>
+<div class="sourceCode" id="cb18"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~x&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;Derived&quot;</span><span class="ot">,</span> <span class="st">&quot;Base&quot;</span><span class="ot">,</span> <span class="st">&quot;R6&quot;</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>        <span class="dt">&quot;state&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;package&quot;</span><span class="fu">:</span> <span class="st">&quot;somepkg&quot;</span><span class="fu">,</span></span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>                  <span class="dt">&quot;public&quot;</span><span class="fu">:</span>  <span class="fu">{</span><span class="dt">&quot;n&quot;</span><span class="fu">:</span> <span class="dv">6</span><span class="fu">,</span> <span class="dt">&quot;tag&quot;</span><span class="fu">:</span> <span class="st">&quot;t1&quot;</span><span class="fu">},</span></span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>                  <span class="dt">&quot;private&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;extra&quot;</span><span class="fu">:</span> <span class="st">&quot;e&quot;</span><span class="fu">,</span> <span class="dt">&quot;seed&quot;</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">}}}}</span></span></code></pre></div>
 <p>Restoring one, verified end to end on a two-level class with private
 fields at both levels, an inherited method and an active binding:</p>
 <ol style="list-style-type: decimal">
@@ -1213,13 +1250,13 @@ environment is also the environment its methods close over, so it binds
 generator stops accounting for everything that is not state. An instance
 of one is refused where it is written, naming the class, since making
 the class portable is what changes the answer.</p>
-<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>Bound <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Bound&quot;</span>, <span class="at">portable =</span> <span class="cn">FALSE</span>, <span class="at">public =</span> <span class="fu">list</span>(<span class="at">n =</span> <span class="dv">1</span>))</span>
-<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a></span>
-<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>json_state.Bound <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">r6_state</span>(x)</span>
-<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a></span>
-<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">list</span>(<span class="at">a =</span> <span class="dv">1</span>, <span class="at">b =</span> Bound<span class="sc">$</span><span class="fu">new</span>()))</span>
-<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
-<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a><span class="co">#&gt; ! cannot write an instance of the non-portable R6 class `Bound/R6` at `x$b`</span></span></code></pre></div>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a>Bound <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Bound&quot;</span>, <span class="at">portable =</span> <span class="cn">FALSE</span>, <span class="at">public =</span> <span class="fu">list</span>(<span class="at">n =</span> <span class="dv">1</span>))</span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a></span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a>json_state.Bound <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">r6_state</span>(x)</span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a></span>
+<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">list</span>(<span class="at">a =</span> <span class="dv">1</span>, <span class="at">b =</span> Bound<span class="sc">$</span><span class="fu">new</span>()))</span>
+<span id="cb19-6"><a href="#cb19-6" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb19-7"><a href="#cb19-7" tabindex="-1"></a><span class="co">#&gt; ! cannot write an instance of the non-portable R6 class `Bound/R6` at `x$b`</span></span></code></pre></div>
 <p>A reference class instance is refused on the second half of that
 argument alone. Fields are declared, so <code>Class$fields()</code> says
 what the representation is where an <code>R6</code> class says nothing;
@@ -1232,7 +1269,11 @@ settles it, as does one on any class between that and
 The generator is refused rather than recorded by name, unlike the
 <code>R6</code> and S7 ones above, because a walk into one reaches the
 internals of the <code>methods</code> package rather than anything the
-class declares; recording it the way those two are recorded is open.</p>
+class declares; recording it the way those two are recorded is open. The
+same walk keeps an instance refused under the
+<code>self_contained</code> flag below, since the instance binds its
+class definition, and a method of its own does not settle it there, the
+flag asking none.</p>
 <p>The refusal follows the label rather than the shape, which is worth
 stating outright because the shape on its own is written. An environment
 carrying a class attribute of your own making claims nothing about its
@@ -1300,27 +1341,44 @@ whose collation is a locale setting — <code>c(&quot;B&quot;, &quot;a&quot;)</c
 way under <code>C</code> and the other under <code>en_US</code>, and one
 environment writing as two documents on two machines is the opposite of
 diffable.</p>
-<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a>counter <span class="ot">&lt;-</span> <span class="fu">new.env</span>(<span class="at">parent =</span> <span class="fu">asNamespace</span>(<span class="st">&quot;stats&quot;</span>))</span>
-<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>counter<span class="sc">$</span>n <span class="ot">&lt;-</span> <span class="dv">1</span><span class="dt">L</span></span>
-<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a></span>
-<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a><span class="fu">json_write_str</span>(counter)</span>
-<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;namespace:stats\&quot;}},\&quot;bindings\&quot;:{\&quot;n\&quot;:1</span><span class="re">}}}</span><span class="co">&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a>counter <span class="ot">&lt;-</span> <span class="fu">new.env</span>(<span class="at">parent =</span> <span class="fu">asNamespace</span>(<span class="st">&quot;stats&quot;</span>))</span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a>counter<span class="sc">$</span>n <span class="ot">&lt;-</span> <span class="dv">1</span><span class="dt">L</span></span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a><span class="fu">json_write_str</span>(counter)</span>
+<span id="cb20-5"><a href="#cb20-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;namespace:stats\&quot;}},\&quot;bindings\&quot;:{\&quot;n\&quot;:1</span><span class="re">}}}</span><span class="co">&quot;</span></span></code></pre></div>
 <p>The locked bit and locked bindings ride alongside, since nothing else
 can supply them once the environment is rebuilt — where an
 <code>R6</code> instance takes its lock from the generator, a bare
 environment has no generator to ask.</p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="fu">lockEnvironment</span>(counter, <span class="at">bindings =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a></span>
-<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a><span class="fu">json_write_str</span>(counter)</span>
-<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;namespace:stats\&quot;}},\&quot;bindings\&quot;:{\&quot;n\&quot;:1},\&quot;locked\&quot;:true,\&quot;locked_bindings\&quot;:\&quot;n\&quot;}}&quot;</span></span></code></pre></div>
-<p>Two bindings are refused rather than recorded, and for the same
-reason: reading either one runs code. A promise would have to be forced,
-and an environment captured inside a function holds its arguments
-unforced, so forcing one on the writer’s own initiative can error or do
-arbitrary work at write time. An active binding would have to be called,
-and recording what it returned would hand back a plain binding wearing
-its value. Base R writes both unevaluated; this format refuses them, and
-says where.</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="fu">lockEnvironment</span>(counter, <span class="at">bindings =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb21-2"><a href="#cb21-2" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" tabindex="-1"></a><span class="fu">json_write_str</span>(counter)</span>
+<span id="cb21-4"><a href="#cb21-4" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;namespace:stats\&quot;}},\&quot;bindings\&quot;:{\&quot;n\&quot;:1},\&quot;locked\&quot;:true,\&quot;locked_bindings\&quot;:\&quot;n\&quot;}}&quot;</span></span></code></pre></div>
+<p>Two bindings would have to run code to be read, and neither is read.
+A promise would have to be forced, and an environment captured inside a
+function holds its arguments unforced, so forcing one on the writer’s
+own initiative can error or do arbitrary work at write time. A promise
+is refused instead, and the error says where. An active binding would
+have to be called, and recording what it returned would hand back a
+plain binding wearing its value. Base R writes both unevaluated, and
+this format writes an active binding the same way. R hands back the
+function the binding runs without calling it, and that function goes
+under <code>bindings</code> where a plain binding’s value would. Being
+active is a property of the binding, as being locked is: R keeps both as
+flags on the binding itself, and <code>serialize()</code> writes them
+with it. So <code>active_bindings</code> lists the names the flag is set
+on, as <code>locked_bindings</code> does for a lock, and on the way back
+<code>makeActiveBinding()</code> makes each one active again. The
+function is called on neither side, and is a closure like any other,
+recorded by the rule for closures below.</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a>clock <span class="ot">&lt;-</span> <span class="fu">new.env</span>(<span class="at">parent =</span> <span class="fu">globalenv</span>())</span>
+<span id="cb22-2"><a href="#cb22-2" tabindex="-1"></a><span class="fu">makeActiveBinding</span>(<span class="st">&quot;now&quot;</span>, Sys.time, clock)</span>
+<span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a></span>
+<span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a><span class="fu">json_write_str</span>(clock)</span>
+<span id="cb22-5"><a href="#cb22-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;}},\&quot;bindings\&quot;:{\&quot;now\&quot;:{\&quot;~t\&quot;:\&quot;closure\&quot;,\&quot;~v\&quot;:{\&quot;formals\&quot;:null,\&quot;body\&quot;:{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:.POSIXct\&quot;,{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:.Internal\&quot;,{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:Sys.time\&quot;]}]}]},\&quot;environment\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;namespace:base\&quot;</span><span class="re">}}}</span><span class="co">}},\&quot;active_bindings\&quot;:\&quot;now\&quot;}}&quot;</span></span>
+<span id="cb22-6"><a href="#cb22-6" tabindex="-1"></a></span>
+<span id="cb22-7"><a href="#cb22-7" tabindex="-1"></a><span class="fu">bindingIsActive</span>(<span class="st">&quot;now&quot;</span>, <span class="fu">json_read_str</span>(<span class="fu">json_write_str</span>(clock)))</span>
+<span id="cb22-8"><a href="#cb22-8" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
 <p>A name that is not available on the way back is replaced by the
 global environment with a warning, which is what base R already does
 through <code>findPackageEnv()</code> and <code>..getNamespace()</code>.
@@ -1331,15 +1389,15 @@ Substituting silently was never on the table.</p>
 <p>A closure compares by its parts rather than by reference, which is
 the fact this section rests on and is easy to assume the other way
 round.</p>
-<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="fu">identical</span>(<span class="cf">function</span>(x) x <span class="sc">+</span> <span class="dv">1</span>, <span class="cf">function</span>(x) x <span class="sc">+</span> <span class="dv">1</span>)</span>
-<span id="cb21-2"><a href="#cb21-2" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a><span class="fu">identical</span>(<span class="cf">function</span>(x) x <span class="sc">+</span> <span class="dv">1</span>, <span class="cf">function</span>(x) x <span class="sc">+</span> <span class="dv">1</span>)</span>
+<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
 <p>So there is nothing to weaken. Formals, body and environment are what
 a closure is; the first two are language objects and the third is an
 environment, which means a closure needs no machinery beyond the two
 sections above and inherits the environment ladder whole. It round-trips
 exactly wherever the environment it closes over is recorded by name, and
 up to equivalence wherever that environment is recorded by contents.</p>
-<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a><span class="fu">show_documents</span>(mean)</span></code></pre></div>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a><span class="fu">show_documents</span>(mean)</span></code></pre></div>
 <table>
 <colgroup>
 <col width="3%" />
@@ -1361,18 +1419,18 @@ up to equivalence wherever that environment is recorded by contents.</p>
 <p>A closure over a frame of its own records that frame like any other
 environment, so the walk stops at the first rung it reaches rather than
 running to <code>emptyenv()</code> through the workspace.</p>
-<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a>counter <span class="ot">&lt;-</span> <span class="fu">new.env</span>(<span class="at">parent =</span> <span class="fu">globalenv</span>())</span>
-<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a>counter<span class="sc">$</span>i <span class="ot">&lt;-</span> <span class="dv">1</span><span class="dt">L</span></span>
-<span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a></span>
-<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">local</span>(<span class="cf">function</span>() i <span class="sc">+</span> <span class="dv">1</span>, counter))</span>
-<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;closure\&quot;,\&quot;~v\&quot;:{\&quot;formals\&quot;:null,\&quot;body\&quot;:{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:+\&quot;,\&quot;~:i\&quot;,[1.0]]},\&quot;environment\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;}},\&quot;bindings\&quot;:{\&quot;i\&quot;:1</span><span class="re">}}}</span><span class="co">}}&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" tabindex="-1"></a>counter <span class="ot">&lt;-</span> <span class="fu">new.env</span>(<span class="at">parent =</span> <span class="fu">globalenv</span>())</span>
+<span id="cb25-2"><a href="#cb25-2" tabindex="-1"></a>counter<span class="sc">$</span>i <span class="ot">&lt;-</span> <span class="dv">1</span><span class="dt">L</span></span>
+<span id="cb25-3"><a href="#cb25-3" tabindex="-1"></a></span>
+<span id="cb25-4"><a href="#cb25-4" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">local</span>(<span class="cf">function</span>() i <span class="sc">+</span> <span class="dv">1</span>, counter))</span>
+<span id="cb25-5"><a href="#cb25-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;closure\&quot;,\&quot;~v\&quot;:{\&quot;formals\&quot;:null,\&quot;body\&quot;:{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:+\&quot;,\&quot;~:i\&quot;,[1.0]]},\&quot;environment\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;}},\&quot;bindings\&quot;:{\&quot;i\&quot;:1</span><span class="re">}}}</span><span class="co">}}&quot;</span></span></code></pre></div>
 <p>A primitive closes over nothing and has no body to write, so it is
 recorded by the name that finds it again. That is what base R does too,
 and note what it does <em>not</em> do: a closure that happens to be a
 package export is written by value like any other rather than as
 <code>stats::median</code>, because the environment rung already does
 the work a name lookup would.</p>
-<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a><span class="fu">show_documents</span>(sum, <span class="st">`</span><span class="at">if</span><span class="st">`</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a><span class="fu">show_documents</span>(sum, <span class="st">`</span><span class="at">if</span><span class="st">`</span>)</span></code></pre></div>
 <table>
 <thead>
 <tr class="header">
@@ -1396,8 +1454,16 @@ the work a name lookup would.</p>
 and to what <code>parse()</code> returns, and <code>identical()</code>
 ignores all three by default, so dropping them costs nothing against the
 first contract and keeps a document diffable.</p>
-<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" tabindex="-1"></a><span class="fu">formals</span>(identical)<span class="sc">$</span>ignore.srcref</span>
-<span id="cb25-2"><a href="#cb25-2" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<div class="sourceCode" id="cb27"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" tabindex="-1"></a><span class="fu">formals</span>(identical)<span class="sc">$</span>ignore.srcref</span>
+<span id="cb27-2"><a href="#cb27-2" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<p>A definition inside a body is the one exception to the first half.
+The parser keeps its source reference as the last element of the
+<code>function</code> call rather than as an attribute, and
+<code>identical()</code> compares that element like any other. It is
+dropped all the same, for the reason below, and comes back as the
+<code>NULL</code> a parse keeping no source leaves there, so the closure
+is equal to the one that parse would have made rather than to the one
+written.</p>
 <p>Keeping one would be worse than verbose. A <code>srcref</code>
 carries its <code>srcfile</code>, which is an environment holding the
 source text it came from, so a function parsed from a file would arrive
@@ -1409,14 +1475,14 @@ bytecode.</p>
 argument the function was called with stays a promise in its frame
 whether or not it has been forced, so a closure over such a frame meets
 the promise rule above.</p>
-<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a>adder <span class="ot">&lt;-</span> <span class="cf">function</span>(n) {</span>
-<span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a>  <span class="fu">force</span>(n)</span>
-<span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a>  <span class="cf">function</span>(x) x <span class="sc">+</span> n</span>
-<span id="cb26-4"><a href="#cb26-4" tabindex="-1"></a>}</span>
-<span id="cb26-5"><a href="#cb26-5" tabindex="-1"></a></span>
-<span id="cb26-6"><a href="#cb26-6" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">adder</span>(<span class="dv">3</span>))</span>
-<span id="cb26-7"><a href="#cb26-7" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
-<span id="cb26-8"><a href="#cb26-8" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;promise&#39; at `x$environment$bindings$n`</span></span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a>adder <span class="ot">&lt;-</span> <span class="cf">function</span>(n) {</span>
+<span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a>  <span class="fu">force</span>(n)</span>
+<span id="cb28-3"><a href="#cb28-3" tabindex="-1"></a>  <span class="cf">function</span>(x) x <span class="sc">+</span> n</span>
+<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a>}</span>
+<span id="cb28-5"><a href="#cb28-5" tabindex="-1"></a></span>
+<span id="cb28-6"><a href="#cb28-6" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">adder</span>(<span class="dv">3</span>))</span>
+<span id="cb28-7"><a href="#cb28-7" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb28-8"><a href="#cb28-8" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;promise&#39; at `x$environment$bindings$n`</span></span></code></pre></div>
 <p>And a closure a method stored back into the object it belongs to
 reaches that object again through the frame it closes over, which is a
 genuine cycle and is reported as one. Both are the environment rules
@@ -1435,18 +1501,18 @@ from one factory share their environment, which is the ordinary way to
 write a stateful pair in R, and without reference identity the pair
 comes back over two separate frames, so setting through one no longer
 moves what the other reads.</p>
-<div class="sourceCode" id="cb27"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" tabindex="-1"></a>mk <span class="ot">&lt;-</span> <span class="fu">local</span>(</span>
-<span id="cb27-2"><a href="#cb27-2" tabindex="-1"></a>  <span class="cf">function</span>() {</span>
-<span id="cb27-3"><a href="#cb27-3" tabindex="-1"></a>    i <span class="ot">&lt;-</span> <span class="dv">0</span></span>
-<span id="cb27-4"><a href="#cb27-4" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">get =</span> <span class="cf">function</span>() i, <span class="at">set =</span> <span class="cf">function</span>(v) i <span class="ot">&lt;&lt;-</span> v)</span>
-<span id="cb27-5"><a href="#cb27-5" tabindex="-1"></a>  },</span>
-<span id="cb27-6"><a href="#cb27-6" tabindex="-1"></a>  <span class="fu">globalenv</span>()</span>
-<span id="cb27-7"><a href="#cb27-7" tabindex="-1"></a>)</span>
-<span id="cb27-8"><a href="#cb27-8" tabindex="-1"></a></span>
-<span id="cb27-9"><a href="#cb27-9" tabindex="-1"></a>pair <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(<span class="fu">json_write_str</span>(<span class="fu">mk</span>()))</span>
-<span id="cb27-10"><a href="#cb27-10" tabindex="-1"></a>pair<span class="sc">$</span><span class="fu">set</span>(<span class="dv">2</span>)</span>
-<span id="cb27-11"><a href="#cb27-11" tabindex="-1"></a>pair<span class="sc">$</span><span class="fu">get</span>()</span>
-<span id="cb27-12"><a href="#cb27-12" tabindex="-1"></a><span class="co">#&gt; [1] 2</span></span></code></pre></div>
+<div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" tabindex="-1"></a>mk <span class="ot">&lt;-</span> <span class="fu">local</span>(</span>
+<span id="cb29-2"><a href="#cb29-2" tabindex="-1"></a>  <span class="cf">function</span>() {</span>
+<span id="cb29-3"><a href="#cb29-3" tabindex="-1"></a>    i <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb29-4"><a href="#cb29-4" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">get =</span> <span class="cf">function</span>() i, <span class="at">set =</span> <span class="cf">function</span>(v) i <span class="ot">&lt;&lt;-</span> v)</span>
+<span id="cb29-5"><a href="#cb29-5" tabindex="-1"></a>  },</span>
+<span id="cb29-6"><a href="#cb29-6" tabindex="-1"></a>  <span class="fu">globalenv</span>()</span>
+<span id="cb29-7"><a href="#cb29-7" tabindex="-1"></a>)</span>
+<span id="cb29-8"><a href="#cb29-8" tabindex="-1"></a></span>
+<span id="cb29-9"><a href="#cb29-9" tabindex="-1"></a>pair <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(<span class="fu">json_write_str</span>(<span class="fu">mk</span>()))</span>
+<span id="cb29-10"><a href="#cb29-10" tabindex="-1"></a>pair<span class="sc">$</span><span class="fu">set</span>(<span class="dv">2</span>)</span>
+<span id="cb29-11"><a href="#cb29-11" tabindex="-1"></a>pair<span class="sc">$</span><span class="fu">get</span>()</span>
+<span id="cb29-12"><a href="#cb29-12" tabindex="-1"></a><span class="co">#&gt; [1] 2</span></span></code></pre></div>
 <p>Three pieces, and the third is what the first two are for:</p>
 <ul>
 <li><strong>A reference table.</strong> Every reference the walk has
@@ -1467,29 +1533,313 @@ writes and comes back bound the same way. Attributes are read before
 contents for the same reason, since that is the order they were written
 in and a reference only ever points backwards.</li>
 <li><strong>What is still refused.</strong> A cycle closing through an
-object the extension protocol builds in one call — any class with a
-<code>json_state()</code> method, an opted-in <code>R6</code> one among
-them — since a constructor cannot be handed an object that already
-exists. The error names both ends of it. Sharing such an object is fine;
-only the cycle is not, which leaves the chromote shape out
-(<code>Chromote</code> holds <code>sessions</code>, each
+object built in one call — any class with a <code>json_state()</code>
+method, an opted-in <code>R6</code> one among them, and an
+<code>R6</code> class the <code>self_contained</code> flag carries,
+which is rebuilt that way too — since a constructor cannot be handed an
+object that already exists. The error names both ends of it. Sharing
+such an object is fine; only the cycle is not, which leaves the chromote
+shape out (<code>Chromote</code> holds <code>sessions</code>, each
 <code>ChromoteSession</code> holds <code>parent</code>), and both of
-those wrap a live browser process anyway.</li>
+those wrap a live browser process anyway. An <code>R6</code> instance
+the <code>self_contained</code> flag writes whole is an environment
+rather than such an object, so a cycle through one closes again, as does
+one through any environment whose class has a method its author wrote,
+since the flag asks none.</li>
 </ul>
 <p>The cycle in that second bullet is not a corner case: it is what any
 function returning an environment it created produces.</p>
-<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a>frame <span class="ot">&lt;-</span> <span class="fu">local</span>(</span>
-<span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a>  <span class="cf">function</span>() {</span>
-<span id="cb28-3"><a href="#cb28-3" tabindex="-1"></a>    inner <span class="ot">&lt;-</span> <span class="fu">new.env</span>()</span>
-<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a>    inner</span>
-<span id="cb28-5"><a href="#cb28-5" tabindex="-1"></a>  },</span>
-<span id="cb28-6"><a href="#cb28-6" tabindex="-1"></a>  <span class="fu">globalenv</span>()</span>
-<span id="cb28-7"><a href="#cb28-7" tabindex="-1"></a>)</span>
-<span id="cb28-8"><a href="#cb28-8" tabindex="-1"></a></span>
-<span id="cb28-9"><a href="#cb28-9" tabindex="-1"></a>back <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(<span class="fu">json_write_str</span>(<span class="fu">frame</span>()))</span>
-<span id="cb28-10"><a href="#cb28-10" tabindex="-1"></a></span>
-<span id="cb28-11"><a href="#cb28-11" tabindex="-1"></a><span class="fu">identical</span>(<span class="fu">parent.env</span>(back)<span class="sc">$</span>inner, back)</span>
-<span id="cb28-12"><a href="#cb28-12" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a>frame <span class="ot">&lt;-</span> <span class="fu">local</span>(</span>
+<span id="cb30-2"><a href="#cb30-2" tabindex="-1"></a>  <span class="cf">function</span>() {</span>
+<span id="cb30-3"><a href="#cb30-3" tabindex="-1"></a>    inner <span class="ot">&lt;-</span> <span class="fu">new.env</span>()</span>
+<span id="cb30-4"><a href="#cb30-4" tabindex="-1"></a>    inner</span>
+<span id="cb30-5"><a href="#cb30-5" tabindex="-1"></a>  },</span>
+<span id="cb30-6"><a href="#cb30-6" tabindex="-1"></a>  <span class="fu">globalenv</span>()</span>
+<span id="cb30-7"><a href="#cb30-7" tabindex="-1"></a>)</span>
+<span id="cb30-8"><a href="#cb30-8" tabindex="-1"></a></span>
+<span id="cb30-9"><a href="#cb30-9" tabindex="-1"></a>back <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(<span class="fu">json_write_str</span>(<span class="fu">frame</span>()))</span>
+<span id="cb30-10"><a href="#cb30-10" tabindex="-1"></a></span>
+<span id="cb30-11"><a href="#cb30-11" tabindex="-1"></a><span class="fu">identical</span>(<span class="fu">parent.env</span>(back)<span class="sc">$</span>inner, back)</span>
+<span id="cb30-12"><a href="#cb30-12" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+</div>
+<div id="self-contained-documents" class="section level3">
+<h3>Self-contained documents</h3>
+<p>Everything above records a class by the name that finds it again
+wherever one does, and a reference resolves against the reader’s session
+rather than the writer’s. A writer may want the other answer, because
+the document is an archive rather than a wire format, and the
+<code>self_contained</code> flag on both writers is where that is asked
+for.</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" tabindex="-1"></a>Archived <span class="ot">&lt;-</span> <span class="fu">local</span>(</span>
+<span id="cb31-2"><a href="#cb31-2" tabindex="-1"></a>  S7<span class="sc">::</span><span class="fu">new_class</span>(</span>
+<span id="cb31-3"><a href="#cb31-3" tabindex="-1"></a>    <span class="st">&quot;Archived&quot;</span>, <span class="at">properties =</span> <span class="fu">list</span>(<span class="at">n =</span> S7<span class="sc">::</span>class_double), <span class="at">package =</span> <span class="st">&quot;somepkg&quot;</span></span>
+<span id="cb31-4"><a href="#cb31-4" tabindex="-1"></a>  ),</span>
+<span id="cb31-5"><a href="#cb31-5" tabindex="-1"></a>  <span class="fu">globalenv</span>()</span>
+<span id="cb31-6"><a href="#cb31-6" tabindex="-1"></a>)</span>
+<span id="cb31-7"><a href="#cb31-7" tabindex="-1"></a></span>
+<span id="cb31-8"><a href="#cb31-8" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">Archived</span>(<span class="at">n =</span> <span class="dv">1</span>))</span>
+<span id="cb31-9"><a href="#cb31-9" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~t\&quot;:\&quot;object\&quot;,\&quot;~a\&quot;:{\&quot;class\&quot;:[\&quot;somepkg::Archived\&quot;,\&quot;S7_object\&quot;],\&quot;_S7_version\&quot;:1,\&quot;_S7_class\&quot;:{\&quot;~s7\&quot;:{\&quot;class_ref\&quot;:{\&quot;~s7\&quot;:{\&quot;class\&quot;:\&quot;Archived\&quot;,\&quot;package\&quot;:\&quot;somepkg\&quot;</span><span class="re">}}}</span><span class="co">},\&quot;n\&quot;:1.0}}&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb32"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;~t&quot;</span><span class="fu">:</span> <span class="st">&quot;object&quot;</span><span class="fu">,</span> <span class="dt">&quot;~a&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="ot">[</span><span class="st">&quot;somepkg::Archived&quot;</span><span class="ot">,</span> <span class="st">&quot;S7_object&quot;</span><span class="ot">]</span><span class="fu">,</span> <span class="dt">&quot;_S7_version&quot;</span><span class="fu">:</span> <span class="dv">1</span><span class="fu">,</span> <span class="dt">&quot;_S7_class&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class_ref&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;class&quot;</span><span class="fu">:</span> <span class="st">&quot;Archived&quot;</span><span class="fu">,</span> <span class="dt">&quot;package&quot;</span><span class="fu">:</span> <span class="st">&quot;somepkg&quot;</span><span class="fu">,</span> <span class="dt">&quot;parent&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;~s7&quot;</span><span class="fu">:</span> <span class="st">&quot;S7_object&quot;</span><span class="fu">},</span> <span class="dt">&quot;properties&quot;</span><span class="fu">:</span> <span class="fu">{},</span> <span class="dt">&quot;abstract&quot;</span><span class="fu">:</span> <span class="kw">false</span><span class="fu">,</span> <span class="dt">&quot;constructor&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;~t&quot;</span><span class="fu">:</span> <span class="st">&quot;closure&quot;</span><span class="fu">,</span> <span class="dt">&quot;~v&quot;</span><span class="fu">:</span> <span class="fu">{}},</span> <span class="dt">&quot;validator&quot;</span><span class="fu">:</span> <span class="kw">null</span><span class="fu">}}}},</span> <span class="dt">&quot;n&quot;</span><span class="fu">:</span> <span class="fl">1.0</span><span class="fu">}}</span></span></code></pre></div>
+<p>The class is built in the global environment above because that is
+what a class defined in a package has and a class defined in a chunk
+does not: a constructor closing over an environment a name finds again.
+The constructor is recorded by the ordinary closure rule wherever it
+sits, so a class built inside a frame of its own carries that frame’s
+bindings into every document an instance of it is written to, which is
+the environment rule holding rather than a cost of the flag.</p>
+<p>Three things can go wrong with the reference that the definition is
+immune to. The package may not be installed where the document is read,
+and then nothing resolves. It may have been removed or renamed between
+writing and reading. And the class may have drifted in a way that still
+validates, which is the residue the validity check cannot see: after a
+property is dropped from the class, the value genuinely is a valid
+instance of the current definition and the document’s entry for it
+survives as a stray attribute, while a permissive property tolerates its
+own absence, so a property added since is silently missing.</p>
+<p>The definition carries the package the class was scoped by. An
+instance records a class vector the package qualifies —
+<code>somepkg::Archived</code> rather than <code>Archived</code> — and
+the read compares that vector against the class the document resolves
+to, so a definition that dropped the package would rebuild a class the
+object no longer belongs to. Which of the two forms a document holds is
+therefore read off the constructor rather than off the package, which
+leaves <code>package</code> meaning what it means everywhere else and
+every document written before the flag existed reading as it did.
+Methods do not travel with the definition, since S7 registers them on
+the generic and dispatches on that same class vector, so a method
+written for a newer version of the class can meet an object in the shape
+the document archived.</p>
+<p>An <code>R6</code> class generator is the other class the flag
+reaches. Its reference records the class vector and the environment the
+class was defined in, and the lookup that runs on the way out refuses
+the half of the failure it can see, a generator no name finds again
+where the document is written. What it cannot see is a class found there
+and gone where the document is read, which is the half the flag exists
+for, so with the flag set a generator is recorded by what it binds.</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" tabindex="-1"></a>Tally <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Tally&quot;</span>, <span class="at">public =</span> <span class="fu">list</span>(<span class="at">n =</span> <span class="dv">0</span>))</span>
+<span id="cb33-2"><a href="#cb33-2" tabindex="-1"></a></span>
+<span id="cb33-3"><a href="#cb33-3" tabindex="-1"></a><span class="fu">json_write_str</span>(Tally)</span>
+<span id="cb33-4"><a href="#cb33-4" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~r6class\&quot;:{\&quot;class\&quot;:[\&quot;Tally\&quot;,\&quot;R6\&quot;],\&quot;package\&quot;:\&quot;R_GlobalEnv\&quot;}}&quot;</span></span>
+<span id="cb33-5"><a href="#cb33-5" tabindex="-1"></a></span>
+<span id="cb33-6"><a href="#cb33-6" tabindex="-1"></a><span class="fu">json_write_str</span>(Tally, <span class="at">self_contained =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb33-7"><a href="#cb33-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~r6class\&quot;:{\&quot;attributes\&quot;:{\&quot;name\&quot;:\&quot;Tally_generator\&quot;,\&quot;class\&quot;:\&quot;R6ClassGenerator\&quot;},\&quot;bindings\&quot;:{\&quot;active\&quot;:null,\&quot;class\&quot;:true,\&quot;classname\&quot;:\&quot;Tally\&quot;,\&quot;cloneable\&quot;:true,\&quot;debug_names\&quot;:{\&quot;~t\&quot;:\&quot;character\&quot;,\&quot;~v\&quot;:[]},\&quot;inherit\&quot;:null,\&quot;lock_class\&quot;:false,\&quot;lock_objects\&quot;:true,\&quot;parent_env\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;}},\&quot;portable\&quot;:true,\&quot;private_fields\&quot;:null,\&quot;private_methods\&quot;:null,\&quot;public_fields\&quot;:{\&quot;n\&quot;:0.0},\&quot;public_methods\&quot;:{\&quot;clone\&quot;:null</span><span class="re">}}}</span><span class="co">}&quot;</span></span></code></pre></div>
+<p>A generator is an environment, and it is recorded the way an
+environment is, with two things left out. Most of what it binds is the
+class: its name, its fields and methods, its parent, the flags it was
+built with and the environment it was defined in. The rest is R6’s own,
+<code>self</code> and the <code>new()</code>, <code>set()</code> and
+other functions R6 installs in every generator, and the generator’s
+parent is R6’s capsule, which no name finds again. Walking into those
+would record R6 rather than the class: a class with one field and one
+method comes to 68,351 bytes that way, nearly all of it code every
+generator shares, and to 585 as what it binds. R6’s part is what refers
+back to the generator, since R6 installs its functions there and
+<code>self</code> is the generator, where a method of the class’s own is
+enclosed by the environment the class was defined in. So that part is
+left out, and on the way back <code>R6::R6Class()</code> makes an empty
+generator that supplies it again, into which the recorded bindings and
+attributes are put back. A document holding one therefore needs R6 where
+it is read, as one carrying an S7 class needs S7, but not the package
+that defined the class. Whatever the class binds comes back as it was, a
+method added with <code>$set()</code> after the class was built and a
+binding placed on the generator by hand among them. What is read are
+values, so a lock placed on a generator by hand is not recorded, and a
+binding made active on one by hand is recorded as the value it returns;
+R6 does neither. Which of the two forms a document holds is read off
+<code>bindings</code>, which a definition always carries and a reference
+never does.</p>
+<p>Two bindings raise a question the S7 side did not, and so do the
+methods.</p>
+<ul>
+<li>The <strong><code>inherit</code></strong> binding holds the
+expression naming the parent, which R6 resolves in
+<code>parent_env</code> whenever an instance is made. Carrying the
+expression would record a lookup the reader has to repeat, which is the
+reference the flag retires, so the parent it resolves to is carried
+instead, by the same rule. A chain comes back whole, and a parent the
+document holds twice comes back as one generator. The rebuilt class
+holds that parent itself, so it does not follow a parent redefined after
+the document was written, where the class it was written from
+would.</li>
+<li>The <strong><code>parent_env</code></strong> binding is recorded by
+the environment rule, and so is the environment each method closes over,
+which is where the class was defined rather than the
+<code>parent_env</code> it was handed. At top level and in a package
+that is a name, and a name the reader cannot find is replaced by the
+global environment with a warning, as it is anywhere: where the package
+is gone the class still comes back, and a method calling into it fails
+where it is called rather than the document failing where it is read.
+The definition of a class defined inside a function carries that frame
+by its contents, which is where a definition can take more with it than
+the class, and a frame binding the class itself is a cycle through an
+object rebuilt in one call, refused naming both ends of it.</li>
+<li>The <strong>methods</strong> travel with the class, which holds them
+where S7 registers them on a generic. A document read against a class
+fixed or upgraded since it was written rebuilds the class it archived,
+methods and all, which is what an archive asks for and the opposite of
+what dispatch gives an S7 object above. R6’s own <code>clone</code> is
+machinery like the rest, so a <code>null</code> holds its place among
+the methods and the empty generator supplies it again.</li>
+</ul>
+<p>Nothing is looked up in either direction, so a class the write-time
+check refuses — one defined inside a function, one that names no class,
+one whose name finds two generators — is carried wherever the flag is
+set. What comes back is a new generator, equivalent to the one written
+apart from holding its parent where that held the expression finding
+one. The name does not find it again, so writing it without the flag is
+refused rather than recording a reference that would resolve to the
+class the session holds.</p>
+<p>An <code>R6</code> instance is where the flag does more than trade a
+name for a definition, since the default refuses an instance rather than
+naming it. That refusal rests on having to choose: recording an instance
+as its bindings asserts that the bindings are its state, which only the
+class can say, and <code>r6_state()</code> is how its author says so. An
+instance written whole makes no choice. It is an environment, recorded
+by its contents the way any environment is — fields and private
+bindings, an active field as the function it runs, methods, and the
+environment the methods close over — so nothing is left to assert on the
+class’s behalf, and the objection is answered rather than
+overridden.</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a>Meter <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Meter&quot;</span>,</span>
+<span id="cb34-2"><a href="#cb34-2" tabindex="-1"></a>  <span class="at">public =</span> <span class="fu">list</span>(</span>
+<span id="cb34-3"><a href="#cb34-3" tabindex="-1"></a>    <span class="at">n =</span> <span class="dv">0</span>,</span>
+<span id="cb34-4"><a href="#cb34-4" tabindex="-1"></a>    <span class="at">add =</span> <span class="cf">function</span>(<span class="at">by =</span> <span class="dv">1</span>) {</span>
+<span id="cb34-5"><a href="#cb34-5" tabindex="-1"></a>      self<span class="sc">$</span>n <span class="ot">&lt;-</span> self<span class="sc">$</span>n <span class="sc">+</span> by</span>
+<span id="cb34-6"><a href="#cb34-6" tabindex="-1"></a>      <span class="fu">invisible</span>(self)</span>
+<span id="cb34-7"><a href="#cb34-7" tabindex="-1"></a>    }</span>
+<span id="cb34-8"><a href="#cb34-8" tabindex="-1"></a>  ),</span>
+<span id="cb34-9"><a href="#cb34-9" tabindex="-1"></a>  <span class="at">cloneable =</span> <span class="cn">FALSE</span></span>
+<span id="cb34-10"><a href="#cb34-10" tabindex="-1"></a>)</span>
+<span id="cb34-11"><a href="#cb34-11" tabindex="-1"></a></span>
+<span id="cb34-12"><a href="#cb34-12" tabindex="-1"></a>meter <span class="ot">&lt;-</span> Meter<span class="sc">$</span><span class="fu">new</span>()<span class="sc">$</span><span class="fu">add</span>(<span class="dv">2</span>)</span>
+<span id="cb34-13"><a href="#cb34-13" tabindex="-1"></a></span>
+<span id="cb34-14"><a href="#cb34-14" tabindex="-1"></a><span class="fu">json_write_str</span>(meter, <span class="at">self_contained =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb34-15"><a href="#cb34-15" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~id\&quot;:1,\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~a\&quot;:{\&quot;class\&quot;:[\&quot;Meter\&quot;,\&quot;R6\&quot;]},\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_EmptyEnv\&quot;}},\&quot;bindings\&quot;:{\&quot;.__enclos_env__\&quot;:{\&quot;~id\&quot;:2,\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;parent\&quot;:{\&quot;~t\&quot;:\&quot;environment\&quot;,\&quot;~v\&quot;:{\&quot;name\&quot;:\&quot;R_GlobalEnv\&quot;}},\&quot;bindings\&quot;:{\&quot;self\&quot;:{\&quot;~ref\&quot;:1</span><span class="re">}}}</span><span class="co">},\&quot;add\&quot;:{\&quot;~t\&quot;:\&quot;closure\&quot;,\&quot;~v\&quot;:{\&quot;formals\&quot;:{\&quot;~t\&quot;:\&quot;pairlist\&quot;,\&quot;~v\&quot;:{\&quot;by\&quot;:1.0}},\&quot;body\&quot;:{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:{\&quot;,{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:&lt;-\&quot;,{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:$\&quot;,\&quot;~:self\&quot;,\&quot;~:n\&quot;]},{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:+\&quot;,{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:$\&quot;,\&quot;~:self\&quot;,\&quot;~:n\&quot;]},\&quot;~:by\&quot;]}]},{\&quot;~t\&quot;:\&quot;language\&quot;,\&quot;~v\&quot;:[\&quot;~:invisible\&quot;,\&quot;~:self\&quot;]}]},\&quot;environment\&quot;:{\&quot;~ref\&quot;:2</span><span class="re">}}}</span><span class="co">,\&quot;n\&quot;:2.0},\&quot;locked\&quot;:true,\&quot;locked_bindings\&quot;:\&quot;add\&quot;}}&quot;</span></span></code></pre></div>
+<p>What comes back is that environment wearing the class attribute. The
+methods close over a copy of the environment R6 made for them, which
+binds <code>self</code> to the object that came back rather than to the
+one written. Nothing is looked up, so the document reads where neither
+the class nor R6 is available, which is what base R’s
+<code>serialize()</code> makes of an instance too.</p>
+<div class="sourceCode" id="cb35"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" tabindex="-1"></a>back <span class="ot">&lt;-</span> <span class="fu">json_read_str</span>(<span class="fu">json_write_str</span>(meter, <span class="at">self_contained =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb35-2"><a href="#cb35-2" tabindex="-1"></a></span>
+<span id="cb35-3"><a href="#cb35-3" tabindex="-1"></a>back<span class="sc">$</span><span class="fu">add</span>()<span class="sc">$</span>n</span>
+<span id="cb35-4"><a href="#cb35-4" tabindex="-1"></a><span class="co">#&gt; [1] 3</span></span></code></pre></div>
+<p>Three costs come with it.</p>
+<ul>
+<li>The <strong>methods</strong> are the ones the class had where the
+document was written, as with a generator the flag carries, so a class
+fixed or upgraded since does not reach the object. That is what an
+archive asks for and the opposite of what a wire format wants, which is
+why the default goes on refusing rather than writing an instance this
+way.</li>
+<li><strong>Nothing checks</strong> the object on the way back. It is
+built without the generator, so there is no class to check it against,
+as <code>S7::validate()</code> checks an S7 object, and no warning where
+the class has since dropped a field, as <code>r6_restore()</code> gives.
+Nor does <code>initialize</code> run, and a <code>finalize</code> method
+is not registered on the object that comes back.</li>
+<li><strong>R6’s own <code>clone</code></strong> is most of the
+document. R6 puts a copy of that method into every instance of a
+cloneable class, and into each level of the chain the class inherits.
+Leaving it out, as a carried generator does, would have R6 supply it
+again where the document is read, which is the lookup the whole form
+avoids. The <code>Meter</code> class above is built without it to keep
+its document short.</li>
+</ul>
+<p>How much of a document <code>clone</code> makes shows on the
+<code>Tally</code> class from the generator example, beside the same
+class built without it.</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" tabindex="-1"></a>Bare <span class="ot">&lt;-</span> R6<span class="sc">::</span><span class="fu">R6Class</span>(<span class="st">&quot;Tally&quot;</span>, <span class="at">public =</span> <span class="fu">list</span>(<span class="at">n =</span> <span class="dv">0</span>), <span class="at">cloneable =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb36-2"><a href="#cb36-2" tabindex="-1"></a></span>
+<span id="cb36-3"><a href="#cb36-3" tabindex="-1"></a><span class="fu">c</span>(</span>
+<span id="cb36-4"><a href="#cb36-4" tabindex="-1"></a>  <span class="at">cloneable =</span> <span class="fu">nchar</span>(<span class="fu">json_write_str</span>(Tally<span class="sc">$</span><span class="fu">new</span>(), <span class="at">self_contained =</span> <span class="cn">TRUE</span>)),</span>
+<span id="cb36-5"><a href="#cb36-5" tabindex="-1"></a>  <span class="at">bare =</span> <span class="fu">nchar</span>(<span class="fu">json_write_str</span>(Bare<span class="sc">$</span><span class="fu">new</span>(), <span class="at">self_contained =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb36-6"><a href="#cb36-6" tabindex="-1"></a>)</span>
+<span id="cb36-7"><a href="#cb36-7" tabindex="-1"></a><span class="co">#&gt; cloneable      bare </span></span>
+<span id="cb36-8"><a href="#cb36-8" tabindex="-1"></a><span class="co">#&gt;     21273       292</span></span></code></pre></div>
+<p>No <code>json_state()</code> method is asked, an opt-in through
+<code>r6_state()</code> included, and the whole form needs no method in
+the first place, so the package’s own refusal is not asked either.
+Writing what comes back without the flag asks its class for a method as
+for any instance, and is refused where the class has none.</p>
+<p>Nor is a method an author wrote asked for any other class. The record
+a method writes is read back through the class’s own
+<code>json_revive()</code>, found by name, which is the lookup the flag
+exists to avoid. Base R’s <code>serialize()</code> is the model, having
+no per-class hook at all: it writes an object by its type and attributes
+and never asks the class. So a value whose class has a method is written
+by the rule it would take if the class had none, which for the
+<code>account</code> from the plain output section is the attribute
+rule, and the token its method leaves out is written with the rest.</p>
+<div class="sourceCode" id="cb37"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" tabindex="-1"></a><span class="fu">json_write_str</span>(acct)</span>
+<span id="cb37-2"><a href="#cb37-2" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~x\&quot;:{\&quot;class\&quot;:\&quot;account\&quot;,\&quot;state\&quot;:{\&quot;user\&quot;:\&quot;nb\&quot;</span><span class="re">}}}</span><span class="co">&quot;</span></span>
+<span id="cb37-3"><a href="#cb37-3" tabindex="-1"></a></span>
+<span id="cb37-4"><a href="#cb37-4" tabindex="-1"></a><span class="fu">json_write_str</span>(acct, <span class="at">self_contained =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb37-5"><a href="#cb37-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~a\&quot;:{\&quot;class\&quot;:\&quot;account\&quot;},\&quot;~v\&quot;:{\&quot;user\&quot;:\&quot;nb\&quot;,\&quot;token\&quot;:\&quot;s3cret\&quot;}}&quot;</span></span></code></pre></div>
+<p>A field a method would leave out is written, a credential among them,
+as <code>saveRDS()</code> would write it. What the format cannot carry
+stops the write where it sits, as it does where a class has no method,
+rather than being written dead the way <code>serialize()</code> writes
+an external pointer. So a handle a method would stand in for is refused,
+naming the path it sits at, which leaves each reader in
+<code>vignette(&quot;handles&quot;)</code> stopping a self-contained write at the
+connection it holds.</p>
+<p>The package’s own methods keep running, since they are the format’s
+handling of a class rather than an author’s code. An S7 class and an
+<code>R6</code> generator are carried by their definitions, as above,
+and a reference class instance and its generator stay refused, a walk
+into either reaching the <code>methods</code> package’s internals.
+Dispatch reaches the first method along the class chain, which is an
+author’s wherever one comes ahead of the package’s own, as it does for a
+reference class with a method of its own, so under the flag the writer
+calls the package’s method directly.</p>
+<p>The flag’s reach is the set of values recorded by name, and the
+answer differs across that set rather than falling out of one rule.</p>
+<ul>
+<li>A <strong>primitive</strong>, and a <strong>class the S7 package
+itself binds</strong>, have no definition to carry: a walk into either
+lands in machinery rather than in anything an author wrote. The name is
+the only representation available, so the flag has nothing to
+change.</li>
+<li>A <strong>namespace</strong>, a <strong>package environment</strong>
+and the <strong>imports environment</strong> of one could be carried and
+should not be. What that records is a frozen snapshot of an installed
+package, which is both enormous and the wrong object, since a reader
+wants the package that is installed rather than the one that was.</li>
+<li>The <strong>global environment</strong> is the same answer for the
+opposite reason. It is where a reference is most fragile, a closure over
+it being exactly what fails to resolve elsewhere, and also where
+recording by contents is least plausible, since one such closure would
+put a whole workspace into the document.</li>
+<li>The <strong>class name an S4 object records</strong> keeps its
+reference by design rather than for want of an embedded form. An S7
+class and an <code>R6</code> generator are values, which a document
+hands back with nothing else happening. An S4 definition is an entry in
+a registry the whole session shares, and
+<code>methods::validObject()</code> takes no definition to check
+against, resolving the class, each superclass and the coercion to it
+through that registry, so a definition a document carried would check
+nothing until it was registered. Registering one is a side effect no
+other read has, and not a contained one: a class registered anywhere is
+found everywhere, one registered over a class the session holds under
+the same name and package replaces it, and removing it again leaves that
+class missing from its superclass’s list of subclasses. Nor would a
+definition buy what it buys the other two, a document that reads where
+the class is gone, since an S4 document already does, the object being
+rebuilt from its attributes and only the validity check skipped. Where
+the class is present, that check already refuses a slot added, renamed
+or retyped since the document was written, which leaves a slot the class
+has since dropped as the drift only a definition would see, its entry
+surviving as a stray attribute on an object that still validates.</li>
+</ul>
+<p>Two riders. Plain mode records no class at all, so it and the flag
+cannot both be asked for. And the second contract holds within a mode
+rather than across the pair: a document carrying a definition writes
+back to itself where it is written the same way, while re-writing one
+without the flag records the name again, refuses to for an
+<code>R6</code> class, and asks a value’s class for a method again, as
+above.</p>
 </div>
 </div>
 <div id="reading-foreign-json" class="section level2">
@@ -1590,16 +1940,63 @@ from content; only from the lexeme and the shape.</p>
 </table>
 <p>No <code>NA</code> from <code>&quot;NA&quot;</code>, no <code>Inf</code> from
 <code>&quot;Inf&quot;</code>, no date from an ISO-8601-looking string, no data
-frame from an array of objects. There is no strict mode and no lossy
-mode, because there is only one set of rules.</p>
+frame from an array of objects. There is no lossy mode, because there is
+only one set of rules.</p>
 <p>Numbers beyond what R holds exactly were left open while the format
 was being settled, and the resolution is to read them as doubles and say
 so. Silence would have been the one unacceptable answer, since the whole
 point is that a document never comes back quietly changed.</p>
-<div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" tabindex="-1"></a><span class="fu">json_read_str</span>(<span class="st">&quot;[1, 9007199254740993]&quot;</span>)</span>
-<span id="cb29-2"><a href="#cb29-2" tabindex="-1"></a><span class="co">#&gt; Warning: numbers outside the range R can hold exactly were read as doubles:</span></span>
-<span id="cb29-3"><a href="#cb29-3" tabindex="-1"></a><span class="co">#&gt;   9007199254740993</span></span>
-<span id="cb29-4"><a href="#cb29-4" tabindex="-1"></a><span class="co">#&gt; [1] 1.000000e+00 9.007199e+15</span></span></code></pre></div>
+<div class="sourceCode" id="cb38"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" tabindex="-1"></a><span class="fu">json_read_str</span>(<span class="st">&quot;[1, 9007199254740993]&quot;</span>)</span>
+<span id="cb38-2"><a href="#cb38-2" tabindex="-1"></a><span class="co">#&gt; Warning: numbers outside the range R can hold exactly were read as doubles:</span></span>
+<span id="cb38-3"><a href="#cb38-3" tabindex="-1"></a><span class="co">#&gt;   9007199254740993</span></span>
+<span id="cb38-4"><a href="#cb38-4" tabindex="-1"></a><span class="co">#&gt; [1] 1.000000e+00 9.007199e+15</span></span></code></pre></div>
+<div id="reading-without-code" class="section level3">
+<h3>Reading without code</h3>
+<p>The format records code as faithfully as data, which is the point of
+it for a session persisting its own state and the danger in it for one
+reading a file that arrived from outside, such as a board a browser
+uploaded. A call comes back a call, and one spliced into an expression
+with <code>bquote()</code> runs when that expression is evaluated; a
+closure runs where it is called. Other values hold no code themselves
+but reach code the session holds, picked by what the document names: an
+environment recorded by name can load the package it names, a
+<code>~x</code> tag is rebuilt by a <code>json_revive()</code> method
+found under the class it records, an <code>R6</code> or S7 class by its
+generator, and an S4 or S7 object is handed to the check its class
+supplies.</p>
+<p>With <code>code = FALSE</code> a reader neither rebuilds code nor
+calls into R to build or check a value, and every value that would take
+either is refused where it sits, naming the path the way the writer’s
+refusals do: a symbol, a call, a pairlist and an expression, a closure
+and a primitive, an environment, the <code>~r6class</code>,
+<code>~s7</code> and <code>~x</code> tags, and a value carrying the S4
+bit or an <code>_S7_class</code> or <code>S7_class</code> attribute. A
+refusal is an error of class <code>typedjson_code_refusal</code>, so a
+caller can tell a document refused for what it records from one that is
+not JSON at all.</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="st">&#39;{&quot;by&quot;: {&quot;~t&quot;: &quot;language&quot;, &quot;~v&quot;: [&quot;~:Sys.getenv&quot;, &quot;HOME&quot;]}}&#39;</span></span>
+<span id="cb39-2"><a href="#cb39-2" tabindex="-1"></a><span class="fu">json_read_str</span>(doc, <span class="at">code =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb39-3"><a href="#cb39-3" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb39-4"><a href="#cb39-4" tabindex="-1"></a><span class="co">#&gt; ! cannot read a value of type &#39;language&#39; with `code = FALSE` at `x$by`</span></span></code></pre></div>
+<p>What is left is what describes data: the vector types, lists and
+<code>NULL</code>, attributes of any kind, and the <code>~z</code>
+specials. A factor, a date and a data frame therefore still come back,
+and every document the flag does not refuse comes back as the default
+reads it, which the test suite checks over the whole corpus. The flag
+decides whether a document is read and never what it reads as, which is
+what keeps it the one switch a reader takes. Refusing is also the answer
+plain mode gives on the way out, and for the same reason: a document
+that came back without the call it held would be the quiet change this
+package exists to prevent.</p>
+<p>A few of the refusals reach past code itself. An expression is
+refused although each of its elements is checked by the same rule, for
+the reason a pairlist is: both are where R keeps code. An S4 object is
+refused rather than read without its check, since the check is code the
+class supplies and the document picks it by naming the class. A value
+carrying an <code>_S7_class</code> or <code>S7_class</code> attribute is
+refused for the same check, an S7 object itself being refused already
+through its class, which is a <code>~s7</code> tag.</p>
+</div>
 </div>
 <div id="api" class="section level2">
 <h2>API</h2>
@@ -1609,7 +2006,9 @@ json_write_str(x)          json_read_str(txt)
 json_state(x)              json_revive(class, state)     # extension protocol</code></pre>
 <p>Both writers take <code>pretty</code>, which indents, and
 <code>typed</code>, which at <code>FALSE</code> drops the annotations
-for a consumer that brings its own schema.</p>
+for a consumer that brings its own schema. Both readers take
+<code>code</code>, which at <code>FALSE</code> reads a document as data
+alone.</p>
 </div>
 <div id="extension-protocol" class="section level2">
 <h2>Extension protocol</h2>
@@ -1624,24 +2023,24 @@ list back into the object.</p>
 in point. The closure is writable, but the frame it closes over binds
 the constructor’s argument, and an argument is a promise however far it
 has been forced.</p>
-<div class="sourceCode" id="cb31"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" tabindex="-1"></a>adder_class <span class="ot">&lt;-</span> <span class="cf">function</span>(n) {</span>
-<span id="cb31-2"><a href="#cb31-2" tabindex="-1"></a>  <span class="fu">structure</span>(<span class="fu">list</span>(<span class="at">n =</span> n, <span class="at">f =</span> <span class="cf">function</span>(x) x <span class="sc">+</span> n), <span class="at">class =</span> <span class="st">&quot;adder_class&quot;</span>)</span>
-<span id="cb31-3"><a href="#cb31-3" tabindex="-1"></a>}</span></code></pre></div>
-<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">adder_class</span>(<span class="dv">3</span>))</span>
-<span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
-<span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;promise&#39; at `x$f$environment$bindings$n`</span></span></code></pre></div>
+<div class="sourceCode" id="cb41"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" tabindex="-1"></a>adder_class <span class="ot">&lt;-</span> <span class="cf">function</span>(n) {</span>
+<span id="cb41-2"><a href="#cb41-2" tabindex="-1"></a>  <span class="fu">structure</span>(<span class="fu">list</span>(<span class="at">n =</span> n, <span class="at">f =</span> <span class="cf">function</span>(x) x <span class="sc">+</span> n), <span class="at">class =</span> <span class="st">&quot;adder_class&quot;</span>)</span>
+<span id="cb41-3"><a href="#cb41-3" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb42"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" tabindex="-1"></a><span class="fu">json_write_str</span>(<span class="fu">adder_class</span>(<span class="dv">3</span>))</span>
+<span id="cb42-2"><a href="#cb42-2" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
+<span id="cb42-3"><a href="#cb42-3" tabindex="-1"></a><span class="co">#&gt; ! cannot write a value of type &#39;promise&#39; at `x$f$environment$bindings$n`</span></span></code></pre></div>
 <p>What identifies this object is <code>n</code>; the closure is derived
 from it, so the method records the one and drops the other.</p>
-<div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" tabindex="-1"></a>json_state.adder_class <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">list</span>(<span class="at">n =</span> x<span class="sc">$</span>n)</span>
-<span id="cb33-2"><a href="#cb33-2" tabindex="-1"></a></span>
-<span id="cb33-3"><a href="#cb33-3" tabindex="-1"></a>json_revive.adder_class <span class="ot">&lt;-</span> <span class="cf">function</span>(class, state) <span class="fu">adder_class</span>(state<span class="sc">$</span>n)</span>
-<span id="cb33-4"><a href="#cb33-4" tabindex="-1"></a></span>
-<span id="cb33-5"><a href="#cb33-5" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="fu">json_write_str</span>(<span class="fu">adder_class</span>(<span class="dv">3</span>))</span>
-<span id="cb33-6"><a href="#cb33-6" tabindex="-1"></a>doc</span>
-<span id="cb33-7"><a href="#cb33-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~x\&quot;:{\&quot;class\&quot;:\&quot;adder_class\&quot;,\&quot;state\&quot;:{\&quot;n\&quot;:3.0</span><span class="re">}}}</span><span class="co">&quot;</span></span>
-<span id="cb33-8"><a href="#cb33-8" tabindex="-1"></a></span>
-<span id="cb33-9"><a href="#cb33-9" tabindex="-1"></a><span class="fu">json_read_str</span>(doc)<span class="sc">$</span><span class="fu">f</span>(<span class="dv">4</span>)</span>
-<span id="cb33-10"><a href="#cb33-10" tabindex="-1"></a><span class="co">#&gt; [1] 7</span></span></code></pre></div>
+<div class="sourceCode" id="cb43"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" tabindex="-1"></a>json_state.adder_class <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">list</span>(<span class="at">n =</span> x<span class="sc">$</span>n)</span>
+<span id="cb43-2"><a href="#cb43-2" tabindex="-1"></a></span>
+<span id="cb43-3"><a href="#cb43-3" tabindex="-1"></a>json_revive.adder_class <span class="ot">&lt;-</span> <span class="cf">function</span>(class, state) <span class="fu">adder_class</span>(state<span class="sc">$</span>n)</span>
+<span id="cb43-4"><a href="#cb43-4" tabindex="-1"></a></span>
+<span id="cb43-5"><a href="#cb43-5" tabindex="-1"></a>doc <span class="ot">&lt;-</span> <span class="fu">json_write_str</span>(<span class="fu">adder_class</span>(<span class="dv">3</span>))</span>
+<span id="cb43-6"><a href="#cb43-6" tabindex="-1"></a>doc</span>
+<span id="cb43-7"><a href="#cb43-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;{\&quot;~x\&quot;:{\&quot;class\&quot;:\&quot;adder_class\&quot;,\&quot;state\&quot;:{\&quot;n\&quot;:3.0</span><span class="re">}}}</span><span class="co">&quot;</span></span>
+<span id="cb43-8"><a href="#cb43-8" tabindex="-1"></a></span>
+<span id="cb43-9"><a href="#cb43-9" tabindex="-1"></a><span class="fu">json_read_str</span>(doc)<span class="sc">$</span><span class="fu">f</span>(<span class="dv">4</span>)</span>
+<span id="cb43-10"><a href="#cb43-10" tabindex="-1"></a><span class="co">#&gt; [1] 7</span></span></code></pre></div>
 <p>The default methods implement everything above, and dispatch works
 for all three class-vector-carrying object systems. A method is looked
 for on every class the value dispatches on, so an S4 object and a

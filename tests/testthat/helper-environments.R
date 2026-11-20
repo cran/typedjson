@@ -10,6 +10,41 @@ expect_env_equivalent <- function(object, expected) {
   invisible(object)
 }
 
+# S7 1.0.0 gives the constructor of each class an environment of its own. A
+# class the reader rebuilds from its definition gets a new one, so it comes
+# back equivalent rather than identical. A value that holds no S7 class still
+# has to come back identical.
+roundtrip_equivalent <- function(object, expected) {
+
+  if (identical(object, expected)) {
+    return(TRUE)
+  }
+
+  holds_s7_class(expected) &&
+    is.null(env_difference(object, expected)) &&
+    identical(env_sharing(object), env_sharing(expected))
+}
+
+expect_roundtrip_equivalent <- function(object, expected) {
+
+  if (identical(object, expected) || !holds_s7_class(expected)) {
+    testthat::expect_identical(object, expected)
+    return(invisible(object))
+  }
+
+  expect_env_equivalent(object, expected)
+  testthat::expect_identical(env_sharing(object), env_sharing(expected))
+  invisible(object)
+}
+
+# An object holds its class through its attributes, and a class can sit in a
+# list at any depth.
+holds_s7_class <- function(x) {
+  inherits(x, c("S7_class", "S7_class_ref")) ||
+    (is.list(x) && any(vapply(x, holds_s7_class, logical(1L)))) ||
+    any(vapply(attributes(x), holds_s7_class, logical(1L)))
+}
+
 env_difference <- function(x, y, at = "x", seen = env_pairs()) {
 
   if (is.environment(x) || is.environment(y)) {
@@ -73,7 +108,10 @@ env_closure_difference <- function(x, y, at, seen) {
     return(paste0("`", at, "` is a closure on one side only"))
   }
 
-  if (!identical(x, y, ignore.environment = TRUE)) {
+  # No source reference is recorded, and `identical()` compares the one the
+  # parser keeps inside a definition in a body, so both sides go without.
+  if (!identical(utils::removeSource(x), utils::removeSource(y),
+                 ignore.environment = TRUE)) {
     return(paste0("`", at, "` differs"))
   }
 
@@ -135,20 +173,17 @@ env_frame_difference <- function(x, y, at, seen) {
     return(paste0("`", at, "` is locked on one side only"))
   }
 
-  active <- binding_flags(nms, x, bindingIsActive)
-
-  if (!identical(active, binding_flags(nms, y, bindingIsActive)) ||
+  if (!identical(binding_flags(nms, x, bindingIsActive),
+                 binding_flags(nms, y, bindingIsActive)) ||
         !identical(binding_flags(nms, x, bindingIsLocked),
                    binding_flags(nms, y, bindingIsLocked))) {
     return(paste0("`", at, "` binds its names differently"))
   }
 
-  for (nm in nms[!active]) {
+  for (nm in nms) {
 
     difference <- env_difference(
-      get(nm, envir = x, inherits = FALSE),
-      get(nm, envir = y, inherits = FALSE),
-      paste0(at, "$", nm), seen
+      bound_value(nm, x), bound_value(nm, y), paste0(at, "$", nm), seen
     )
 
     if (!is.null(difference)) {
@@ -159,6 +194,17 @@ env_frame_difference <- function(x, y, at, seen) {
   env_difference(
     parent.env(x), parent.env(y), paste0("parent.env(", at, ")"), seen
   )
+}
+
+# An active binding is compared by the function it runs, which is what the
+# document records, rather than by what calling that returns.
+bound_value <- function(nm, env) {
+
+  if (bindingIsActive(nm, env)) {
+    return(activeBindingFunction(nm, env))
+  }
+
+  get(nm, envir = env, inherits = FALSE)
 }
 
 # A cycle reaches the same pair of environments twice, so the pair standing
@@ -244,9 +290,7 @@ env_sharing_frame <- function(x, at, state) {
   }
 
   for (nm in ls(x, all.names = TRUE)) {
-    env_sharing_visit(
-      get(nm, envir = x, inherits = FALSE), paste0(at, "$", nm), state
-    )
+    env_sharing_visit(bound_value(nm, x), paste0(at, "$", nm), state)
   }
 
   env_sharing_visit(
